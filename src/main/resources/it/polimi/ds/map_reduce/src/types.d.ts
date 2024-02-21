@@ -1,4 +1,3 @@
-// @ts-ignore
 type FlatMapFn<K, V, K1, V1> = (k: K, v: V) => Map<K1, V1>;
 type MapFn<K, V, V1> = (k: K, v: V) => V1
 type FilterFn<K, V> = (k: K, v: V) => boolean;

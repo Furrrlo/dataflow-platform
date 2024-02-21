@@ -2,7 +2,7 @@ engine
     .lines("kinglear.txt")
     .partitions(8)
     .flatMap(function(line, _) {
-        let words = /** @type Map<string, number> */ new Map();
+        let words = /** @type {Map<string, number>} */ new Map();
         line.split(/(\s+)/).forEach(function(word) {
             word = word.trim();
             if(word.length !== 0)

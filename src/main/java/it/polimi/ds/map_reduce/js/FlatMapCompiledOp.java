@@ -36,7 +36,7 @@ public final class FlatMapCompiledOp implements CompiledOp, Function<Tuple2, Map
                 ls -> {
                     if(ls.size() != 2)
                         throw new IllegalStateException("Invalid returned element for flatMap op " + ls);
-                    return ls.get(0);
+                    return ls.getFirst();
                 },
                 ls -> ls.get(1))
         );
