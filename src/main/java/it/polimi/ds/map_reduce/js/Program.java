@@ -30,6 +30,13 @@ public record Program(Src src, int partitions, List<Op> ops) {
         return new CompiledProgram(src, partitions, ops);
     }
 
+    public static List<CompiledOp> compile(ScriptEngine engine, List<Op> ops) throws ScriptException {
+        List<CompiledOp> res = new ArrayList<>();
+        for (Op op : ops)
+            res.add(compile(engine, op));
+        return res;
+    }
+
     public static CompiledOp compile(ScriptEngine engine, Op op) throws ScriptException {
         // Replace the global object, just in case it's fucked
         engine.setBindings(engine.createBindings(), ScriptContext.GLOBAL_SCOPE);
