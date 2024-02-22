@@ -1,0 +1,15 @@
+{
+  "enable": [
+    "all"
+  ],
+  "disable": [
+    {
+      "value": "processing",
+      "because": "Javac complains about annotations not being matched by any annotation processor even if they were"
+    },
+    {
+      "value": "try",
+      "because": "Javac complains about auto-closeable resource never referenced in body of try statement, which is what I want in the first place"
+    }
+  ]
+}

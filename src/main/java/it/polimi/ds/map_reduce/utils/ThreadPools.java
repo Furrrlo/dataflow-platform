@@ -11,7 +11,7 @@ import java.util.function.Function;
  * @see java.util.concurrent.ExecutorService
  * @see java.util.concurrent.ScheduledExecutorService
  */
-public class ThreadPools {
+public final class ThreadPools {
 
     private ThreadPools() {
     }

@@ -3,13 +3,19 @@ package it.polimi.ds.map_reduce.js;
 import it.polimi.ds.map_reduce.src.CsvSrc;
 import it.polimi.ds.map_reduce.src.LinesSrc;
 import it.polimi.ds.map_reduce.src.Src;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
-public class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Program, ProgramNashornTreeVisitor.Ctx> {
+@SuppressWarnings({
+        "ClassEscapesDefinedScope" // There's no way to get an instance of this class, it can't escape
+})
+public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Program, ProgramNashornTreeVisitor.Ctx> {
 
     private static final ProgramNashornTreeVisitor INSTANCE = new ProgramNashornTreeVisitor();
 
@@ -27,7 +33,7 @@ public class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Progra
     protected record Ctx(String sourceCode,
                          LineMap lineMap,
                          State state,
-                         Src src,
+                         @Nullable Src src,
                          int partitions,
                          List<Op> ops) {
         public Ctx transitionState() {
@@ -57,6 +63,7 @@ public class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Progra
         }
     }
 
+    @Override
     protected Program throwIllegalState(Tree node, Ctx ctx) {
         throw new IllegalStateException("Unexpected tree node " + node.getKind() +
                 " (state: " + ctx.state + ") " +
@@ -91,6 +98,9 @@ public class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Progra
         };
     }
 
+    @SuppressFBWarnings(
+            value = "STT_STRING_PARSING_A_FIELD",
+            justification = "This method is parsing source code, so it's doing exactly what's intended")
     public Program visitEngineFunctionCall(FunctionCallTree node, Ctx ctx) {
         if(!(node.getFunctionSelect() instanceof MemberSelectTree mst))
             return throwIllegalState(node.getFunctionSelect(), ctx);
@@ -162,7 +172,7 @@ public class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Progra
             case CSV -> 2;
         };
 
-        if(node.getArguments().size() < 1 || node.getArguments().size() > maxExpectedArgs)
+        if(node.getArguments().isEmpty() || node.getArguments().size() > maxExpectedArgs)
             return throwIllegalState(mst.getExpression(), ctx);
 
         if(!(node.getArguments().get(0) instanceof LiteralTree lt) || !(lt.getValue() instanceof String fileName))
@@ -198,6 +208,9 @@ public class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Progra
         if(!node.getName().equals("engine"))
             return throwIllegalState(node, ctx);
 
-        return new Program(ctx.src(), ctx.partitions(), ctx.ops());
+        return new Program(
+                Objects.requireNonNull(ctx.src(), "Missing source"),
+                ctx.partitions(),
+                ctx.ops());
     }
 }

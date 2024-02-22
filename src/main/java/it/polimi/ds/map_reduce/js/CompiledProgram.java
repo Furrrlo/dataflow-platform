@@ -3,6 +3,7 @@ package it.polimi.ds.map_reduce.js;
 import it.polimi.ds.map_reduce.Tuple2;
 import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
 import it.polimi.ds.map_reduce.src.Src;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 
 import java.io.IOException;
 import java.util.List;
@@ -11,6 +12,9 @@ import java.util.stream.Stream;
 
 public record CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
 
+    @SuppressFBWarnings(
+            value = "OCP_OVERLY_CONCRETE_PARAMETER",
+            justification =  "Can't make it more general 'cause it's the canonical ctor")
     public CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
         this.src = src;
         this.partitions = partitions;
@@ -24,7 +28,7 @@ public record CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
     }
 
     public static Stream<Tuple2> execute(List<CompiledOp> ops, Stream<Tuple2> data) {
-        for (CompiledOp op : ops)
+        for (CompiledOp op : ops) {
             data = switch (op) {
                 case FilterCompiledOp filter -> data.filter(filter);
                 case MapCompiledOp map -> data.map(map);
@@ -42,6 +46,7 @@ public record CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
                                         .map(Tuple2::value)
                                         .collect(Collectors.toList())));
             };
+        }
         return data;
     }
 }

@@ -1,0 +1,38 @@
+[versions]
+junit = "5.9.1"
+
+errorprone = "2.25.0"
+spotbugs = "4.8.3"
+pmd = "7.0.0-rc4"
+
+[libraries]
+nashorn = "org.openjdk.nashorn:nashorn-core:15.4"
+
+# Logging stuff
+slf4j = "org.slf4j:slf4j-api:2.0.12"
+
+# Annotations libraries, these do not add any actual functionality, only allow for additional compiler checks
+annotations-jspecify = "org.jspecify:jspecify:0.3.0" # Nullability annotations
+annotations-jetbrains = "org.jetbrains:annotations:24.1.0" # IDE annotations
+annotations-errorprone = { group="com.google.errorprone", name="error_prone_annotations", version.ref="errorprone" } # Errorprone annotations for additional checks
+
+# Test
+junit-bom = { group="org.junit", name="junit-bom", version.ref="junit" }
+junit-jupiter = { group="org.junit.jupiter", name="junit-jupiter" }
+
+# Code Quality stuff
+cq-errorprone-core = { group="com.google.errorprone", name="error_prone_core", version.ref="errorprone" }
+cq-errorprone-nullaway = "com.uber.nullaway:nullaway:0.10.23"
+cq-spotbugsPlugins-sb-contrib = "com.mebigfatguy.sb-contrib:sb-contrib:7.6.4"
+cq-spotbugsPlugins-findsecbugs = "com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0"
+
+plgns-cq-spotbugs = "com.github.spotbugs.snom:spotbugs-gradle-plugin:6.0.7"
+plgns-cq-errorprone = "net.ltgt.gradle:gradle-errorprone-plugin:3.1.0"
+plgns-cq-nullaway = "net.ltgt.gradle:gradle-nullaway-plugin:2.0.0"
+
+plgns-cq-pmd-core = { module = "net.sourceforge.pmd:pmd", version.ref = "pmd" }
+plgns-cq-pmd-ant = { module = "net.sourceforge.pmd:pmd-ant", version.ref = "pmd" }
+plgns-cq-pmd-java = { module = "net.sourceforge.pmd:pmd-java", version.ref = "pmd" }
+
+[bundles]
+plgns-cq-pmd = ["plgns-cq-pmd-core", "plgns-cq-pmd-ant", "plgns-cq-pmd-java"]

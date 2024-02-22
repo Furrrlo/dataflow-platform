@@ -14,8 +14,12 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.List;
 
-public class WorkerMain {
+public final class WorkerMain {
 
+    private WorkerMain() {
+    }
+
+    @SuppressWarnings({ "AddressSelection", "PMD.AvoidUsingHardCodedIP" })
     public static void main(String[] args) throws IOException {
         ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
 

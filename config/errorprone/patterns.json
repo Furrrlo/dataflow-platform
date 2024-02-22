@@ -1,0 +1,18 @@
+{
+  "enable": [
+  ],
+  "disable": [
+    "MissingSummary",
+    {
+      "value": "MutableConstantField",
+      "because": "I don't want to use guava collections"
+    }
+  ],
+  "error": [
+    "NullAway"
+  ],
+  "disableInTests": [
+    "SystemOut",
+    "InconsistentOverloads"
+  ]
+}

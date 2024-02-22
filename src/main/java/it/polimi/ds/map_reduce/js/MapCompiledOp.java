@@ -15,6 +15,6 @@ public final class MapCompiledOp implements CompiledOp, Function<Tuple2, Tuple2>
 
     @Override
     public Tuple2 apply(Tuple2 in) {
-        return new Tuple2(in.value(), fn.apply(in.key(), in.value()));
+        return new Tuple2(in.key(), fn.apply(in.key(), in.value()));
     }
 }

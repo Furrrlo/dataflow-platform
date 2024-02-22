@@ -2,6 +2,7 @@ package it.polimi.ds.map_reduce.socket;
 
 import it.polimi.ds.map_reduce.socket.packets.AckPacket;
 import it.polimi.ds.map_reduce.socket.packets.Packet;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import it.polimi.ds.map_reduce.utils.ThreadPools;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -47,6 +48,7 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
     record QueuedOutput(SeqPacket packet, CompletableFuture<@Nullable Void> future) {
     }
 
+    @SuppressWarnings("this-escape") // No idea what is escaping
     public SocketManagerImpl(String name, ExecutorService executor, Socket socket) throws IOException {
         this(name, executor, socket, socket.getInputStream(), socket.getOutputStream());
     }
@@ -56,6 +58,10 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         this(name, executor, null, is, os);
     }
 
+    @SuppressWarnings({
+            "this-escape", // Known, escapes but shouldn't be an issue
+            "PatternVariableHidesField" // Done on purpose
+    })
     private SocketManagerImpl(String name,
                               ExecutorService executor,
                               @Nullable Socket socket,
@@ -142,6 +148,11 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
             throw new IOException(CLOSE_EX_MSG);
     }
 
+    @SuppressWarnings({
+            "PMD.UnusedAssignment",
+            "PMD.AvoidInstanceofChecksInCatchClause",
+            "PMD.ExceptionAsFlowControl"
+    })
     private void readLoop() {
         try {
             SeqPacket closePacket = null;
@@ -216,6 +227,10 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         }
     }
 
+    @SuppressWarnings({
+            "PMD.UnusedAssignment",
+            "PMD.AvoidInstanceofChecksInCatchClause"
+    })
     private void writeLoop() {
         QueuedOutput p = null;
         try {
@@ -276,19 +291,24 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         }
     }
 
+    @SuppressWarnings("PMD.PreserveStackTrace") // The stack trace is discarded intentionally
+    @SuppressFBWarnings({
+            "EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS", // Only converted to unchecked if completely unexpected
+            "LEST_LOST_EXCEPTION_STACK_TRACE" // The stack trace is discarded intentionally
+    })
     private void doSend(SeqPacket toSend) throws IOException {
         ensureOpen();
 
         if (!isSendTaskRunning)
             throw new IOException(CLOSE_EX_MSG);
 
-        final CompletableFuture<Void> hasSent = new CompletableFuture<>();
+        final CompletableFuture<Void> didSend = new CompletableFuture<>();
         LOGGER.trace("[{}] Sending {}...\"", name, toSend);
-        outPacketQueue.add(new QueuedOutput(toSend, hasSent));
+        outPacketQueue.add(new QueuedOutput(toSend, didSend));
         LOGGER.trace("[{}] {}", name, outPacketQueue.size());
 
         try {
-            ThreadPools.getUninterruptibly(hasSent);
+            ThreadPools.getUninterruptibly(didSend);
         } catch (ExecutionException e) {
             throw rethrowIOException(e.getCause() != null ? e.getCause() : e, "Failed to send packet " + toSend);
         }
@@ -300,39 +320,38 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         if (!isRecvTaskRunning)
             throw new IOException(CLOSE_EX_MSG);
 
-        final NBlockingQueue.Matcher<Object> cond = (obj, res) -> {
+        final NBlockingQueue.Matcher<Object> cond = (obj, res) -> switch (obj) {
             // We should be the only ones getting this packet, consume it
-            if (obj instanceof SeqPacket pkt && filter.test(pkt))
-                return res.consume();
+            case SeqPacket pkt when filter.test(pkt) -> res.consume();
             // Exceptions are not specific to us, but to the whole receive thread, so
             // we shouldn't be consuming it, as everybody has to get it
-            if (obj instanceof Throwable)
-                return res.peek();
-
-            return res.skip();
+            case Throwable ignored -> res.peek();
+            default -> res.skip();
         };
-        var res = inPacketQueue.takeFirstMatching(cond);
-        // Correct result
-        if (res instanceof SeqPacket pkt)
-            return pkt;
-        // We got an exception
-        if (res instanceof Throwable t)
-            throw rethrowIOException(t, "Failed to receive packet");
 
-        throw new AssertionError("Unexpected result from queue " + res);
+        Object res = inPacketQueue.takeFirstMatching(cond);
+        return switch (res) {
+            case SeqPacket pkt -> pkt;
+            case Throwable t -> throw rethrowIOException(t, "Failed to receive packet");
+            default -> throw new AssertionError("Unexpected result from queue " + res);
+        };
     }
 
+    @SuppressFBWarnings(
+            value = "BC_UNCONFIRMED_CAST",
+            justification = "It's literally confirmed by the language")
     private RuntimeException rethrowIOException(Throwable t, String msg) throws IOException {
-        if (t instanceof RuntimeException ex) {
-            ex.addSuppressed(new Exception("Called from here"));
-            throw ex;
+        switch (t) {
+            case RuntimeException ex -> {
+                ex.addSuppressed(new Exception("Called from here"));
+                throw ex;
+            }
+            case Error ex -> {
+                ex.addSuppressed(new Exception("Called from here"));
+                throw ex;
+            }
+            default -> throw new IOException(msg, t);
         }
-        if (t instanceof Error ex) {
-            ex.addSuppressed(new Exception("Called from here"));
-            throw ex;
-        }
-
-        throw new IOException(msg, t);
     }
 
     private <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> doSendAndWaitResponse(SeqPacket p, Class<R> replyType)

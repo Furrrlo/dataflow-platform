@@ -1,5 +1,6 @@
 package it.polimi.ds.map_reduce.socket;
 
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.jspecify.annotations.Nullable;
 
@@ -33,7 +34,10 @@ public class NBlockingQueue<E> {
      * which will be in charge of clearing the processed objects queue and unlinking it from its prev.
      */
 
-    private class Node {
+    @SuppressFBWarnings(
+            value = "FCBL_FIELD_COULD_BE_LOCAL",
+            justification = "No clue, prev is simply not a local")
+    private final class Node {
 
         private volatile @Nullable Node prev;
         private final AtomicReference<Node> next = new AtomicReference<>();
@@ -214,7 +218,7 @@ public class NBlockingQueue<E> {
         SKIP
     }
 
-    static class ProcessResultCtx {
+    static final class ProcessResultCtx {
 
         private static final ProcessResultCtx INSTANCE = new ProcessResultCtx();
 

@@ -2,6 +2,7 @@ import it.polimi.ds.map_reduce.Tuple2;
 import it.polimi.ds.map_reduce.js.CompiledProgram;
 import it.polimi.ds.map_reduce.js.ProgramNashornTreeVisitor;
 import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
@@ -13,10 +14,16 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
-public class Main {
+@SuppressWarnings("DefaultPackage")
+public final class Main {
 
+    private Main() {
+    }
+
+    @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
     public static void main(String[] args) throws IOException, ScriptException {
         final LocalSrcFileLoader fileLoader = new LocalSrcFileLoader(Paths.get("./"));
         final String programFileName = "word-count.js";
@@ -36,7 +43,10 @@ public class Main {
 
         System.out.println(program.execute(fileLoader)
                 .stream()
-                .sorted(Comparator.<Tuple2>comparingInt(t -> ((Number) t.value()).intValue()).reversed())
+                .sorted(Comparator.<Tuple2>comparingInt(t -> Objects
+                        .requireNonNullElse((Number) t.value(), 0)
+                        .intValue()
+                ).reversed())
                 .limit(10)
                 .collect(Collectors.toList()));
     }

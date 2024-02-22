@@ -1,6 +1,7 @@
 package it.polimi.ds.map_reduce.js;
 
 import it.polimi.ds.map_reduce.src.Src;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.scripting.JSObject;
 import org.openjdk.nashorn.api.scripting.ScriptObjectMirror;
 
@@ -14,6 +15,9 @@ import java.util.function.BiFunction;
 
 public record Program(Src src, int partitions, List<Op> ops) {
 
+    @SuppressFBWarnings(
+            value = "OCP_OVERLY_CONCRETE_PARAMETER",
+            justification =  "Can't make it more general 'cause it's the canonical ctor")
     public Program(Src src, int partitions, List<Op> ops) {
         if(ops.stream().limit(ops.size() - 1).anyMatch(o -> o.kind().isTerminal()))
             throw new IllegalArgumentException("Intermediate instruction is terminal");
@@ -24,19 +28,24 @@ public record Program(Src src, int partitions, List<Op> ops) {
     }
 
     public CompiledProgram compile(ScriptEngine engine) throws ScriptException {
-        List<CompiledOp> ops = new ArrayList<>();
-        for (Op op : this.ops)
+        List<CompiledOp> ops = new ArrayList<>(this.ops.size());
+        for (Op op : this.ops) {
             ops.add(compile(engine, op));
+        }
         return new CompiledProgram(src, partitions, ops);
     }
 
     public static List<CompiledOp> compile(ScriptEngine engine, List<Op> ops) throws ScriptException {
-        List<CompiledOp> res = new ArrayList<>();
-        for (Op op : ops)
+        List<CompiledOp> res = new ArrayList<>(ops.size());
+        for (Op op : ops) {
             res.add(compile(engine, op));
+        }
         return res;
     }
 
+    @SuppressFBWarnings(
+            value = "VA_FORMAT_STRING_USES_NEWLINE",
+            justification = "Not printed, only compiled and hard to change 'cause it's a multiline string")
     public static CompiledOp compile(ScriptEngine engine, Op op) throws ScriptException {
         // Replace the global object, just in case it's fucked
         engine.setBindings(engine.createBindings(), ScriptContext.GLOBAL_SCOPE);

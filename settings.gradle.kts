@@ -1,2 +1,3 @@
-rootProject.name = "map_reduce"
+rootProject.name = "dataflow-platform"
 
+includeBuild("build-logic")
