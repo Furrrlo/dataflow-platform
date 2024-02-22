@@ -1,6 +1,5 @@
 package it.polimi.ds.map_reduce.src;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -25,9 +24,6 @@ public class LocalSrcFileLoader {
 
     public boolean exists(String file) {
         final URL inJarIs = LocalSrcFileLoader.class.getResource(file);
-        if(inJarIs != null)
-            return true;
-
-        return Files.exists(baseDir.resolve(file));
+        return inJarIs != null || Files.exists(baseDir.resolve(file));
     }
 }

@@ -4,29 +4,34 @@ import it.polimi.ds.map_reduce.Tuple2;
 import it.polimi.ds.map_reduce.js.CompiledProgram;
 import it.polimi.ds.map_reduce.js.ProgramNashornTreeVisitor;
 import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.Scanner;
 import java.util.stream.Collectors;
 
-public class CoordinatorMain {
-    public CoordinatorMain() {
+public final class CoordinatorMain {
+
+    private CoordinatorMain() {
     }
 
-    public static void main(String args[]) throws ScriptException, IOException {
+    @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
+    public static void main(String[] args) throws ScriptException, IOException {
 
         final LocalSrcFileLoader fileLoader = new LocalSrcFileLoader(Paths.get("./"));
-        Scanner in = new Scanner(System.in);
+        final Scanner in = new Scanner(System.in, System.console() != null ?
+                System.console().charset() :
+                StandardCharsets.UTF_8);
 
         Parser parser = Parser.create("--language=es6");
         ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
@@ -52,7 +57,10 @@ public class CoordinatorMain {
 
             System.out.println(program.execute(fileLoader)
                     .stream()
-                    .sorted(Comparator.<Tuple2>comparingInt(t -> ((Number) t.value()).intValue()).reversed())
+                    .sorted(Comparator.<Tuple2>comparingInt(t -> Objects
+                            .requireNonNullElse((Number) t.value(), 0)
+                            .intValue()
+                    ).reversed())
                     .limit(10)
                     .collect(Collectors.toList()));
         }
