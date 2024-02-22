@@ -120,14 +120,36 @@ tasks.withType<JavaCompile> {
     }
 }
 
+// https://github.com/spotbugs/spotbugs-gradle-plugin/issues/172
+val spotbugsPrintReports by tasks.registering {
+    enabled = spotBugsEnabled
+    doLast {
+        if(!spotBugsEnabled)
+            return@doLast
+
+        val reportsDir = project.layout.buildDirectory.dir("reports/spotbugs").get().asFile
+        reportsDir.listFiles()?.forEach {
+            if(!it.name.endsWith(".txt"))
+                return@forEach
+
+            println(it.name.substring(0, it.name.length - ".txt".length))
+            println(it.readText())
+            println()
+        }
+    }
+}
+
 afterEvaluate {
     tasks.withType<SpotBugsTask> {
         enabled = spotBugsEnabled
         group = "SpotBugs"
+        extraArgs = listOf("-longBugCodes")
         reports {
+            create("text") { required.set(true) }
             create("xml") { required.set(true) }
             create("html") { required.set(true) }
         }
+        finalizedBy(spotbugsPrintReports)
     }
 }
 
