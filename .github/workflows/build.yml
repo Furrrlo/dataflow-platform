@@ -1,0 +1,19 @@
+name: build
+on: [ push, pull_request ]
+permissions: read-all
+
+jobs:
+  compile:
+    name: Compile
+    runs-on: ubuntu-latest
+    env:
+      JAVA_VERSION: 21
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Compile
+        uses: ./.github/actions/run-gradle
+        with:
+          java: ${{ env.JAVA_VERSION }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          arguments: check -x test

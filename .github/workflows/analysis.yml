@@ -1,0 +1,28 @@
+name: analysis
+on: [ push, pull_request ]
+permissions: read-all
+
+jobs:
+  pmd:
+    runs-on: ubuntu-latest
+    env:
+      JAVA_VERSION: 21
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Pmd
+        uses: ./.github/actions/run-gradle
+        with:
+          java: ${{ env.JAVA_VERSION }}
+          arguments: pmdMain -Ppmd
+
+  spotbugs:
+    runs-on: ubuntu-latest
+    env:
+      JAVA_VERSION: 21
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Spotbugs
+        uses: ./.github/actions/run-gradle
+        with:
+          java: ${{ env.JAVA_VERSION }}
+          arguments: spotbugsMain -Pspotbugs
