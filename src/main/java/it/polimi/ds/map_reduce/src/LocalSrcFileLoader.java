@@ -30,7 +30,7 @@ public class LocalSrcFileLoader {
     }
 
     public void createNewFile(String fileName) {
-        File file = new File(baseDir + fileName);
+        File file = new File(fileName);
         try {
             if (file.createNewFile())
                 System.out.println("New file created correctly");

@@ -16,6 +16,9 @@ dependencies {
     // Logging stuff
     implementation(libs.slf4j)
 
+    // Postgres
+    //implementation("org.postgresql:postgresql:42.7.2")
+
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
 }
