@@ -1,28 +1,26 @@
-plugins {
-    id("java")
-    id("dataflow-platform.code-quality")
-}
-
 group = "it.polimi.ds"
 version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
-}
+val theLibs = project.libs
+subprojects {
+    apply {
+        plugin<JavaPlugin>()
+    }
 
-dependencies {
-    implementation(libs.nashorn)
+    group = rootProject.group
+    version = rootProject.version
 
-    // Logging stuff
-    implementation(libs.slf4j)
+    repositories {
+        mavenCentral()
+    }
 
-    // Postgres
-    //implementation("org.postgresql:postgresql:42.7.2")
+    val testImplementation by configurations
+    dependencies {
+        testImplementation(platform(theLibs.junit.bom))
+        testImplementation(theLibs.junit.jupiter)
+    }
 
-    testImplementation(platform(libs.junit.bom))
-    testImplementation(libs.junit.jupiter)
-}
-
-tasks.test {
-    useJUnitPlatform()
+    tasks.named<Test>("test") {
+        useJUnitPlatform()
+    }
 }
