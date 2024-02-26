@@ -58,7 +58,7 @@ public final class WorkerManager implements Closeable {
 
         for (Worker w : workers) {
             try {
-                w.socket().close();
+                w.getSocket().close();
             } catch (IOException ex) {
                 exs.add(ex);
             }
@@ -75,13 +75,17 @@ public final class WorkerManager implements Closeable {
         }
     }
 
+    public @Unmodifiable Set<Worker> getWorkers() {
+        return workers;
+    }
+
     @SuppressFBWarnings({"IMPROPER_UNICODE"}) // Not security sensitive
     public @Unmodifiable List<Worker> getCloseToDfsNode(String dfsNode) {
         // This is weird, but it's to avoid having spotbugs
         // report the issue on the lambda where I cannot suppress it
         Predicate<String> equalsIgnoreCase = dfsNode::equalsIgnoreCase;
         return workers.stream()
-                .filter(w -> equalsIgnoreCase.test(w.dfsNodeName()))
+                .filter(w -> equalsIgnoreCase.test(w.getDfsNodeName()))
                 .toList();
     }
 }

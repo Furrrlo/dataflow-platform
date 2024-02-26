@@ -24,10 +24,14 @@ public final class DfsSrc implements CoordinatorSrc {
         this.file = file;
     }
 
-    @Override
-    public Stream<Tuple2> loadAll() {
+    public DfsFile getDfsFile() {
         if(file == null)
             file = dfs.findFile(fileName);
-        return dfs.loadAll(file);
+        return file;
+    }
+
+    @Override
+    public Stream<Tuple2> loadAll() {
+        return dfs.loadAll(getDfsFile());
     }
 }

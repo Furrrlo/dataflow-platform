@@ -5,11 +5,15 @@ import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
 import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
 import it.polimi.ds.dataflow.coordinator.src.NonPartitionedCoordinatorSrc;
+import it.polimi.ds.dataflow.dfs.DfsFile;
+import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
+import it.polimi.ds.dataflow.js.Op;
 import it.polimi.ds.dataflow.js.Program;
-import it.polimi.ds.dataflow.socket.packets.CreateFilePartitionPacket;
-import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.socket.packets.*;
 import it.polimi.ds.dataflow.src.Src;
+import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -21,7 +25,7 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.StructuredTaskScope;
@@ -116,7 +120,6 @@ public final class CoordinatorMain {
         }
     }
 
-    @SuppressFBWarnings("DLS_DEAD_LOCAL_STORE") // TODO: remove
     private void executeProgram(String programFileName, String src) throws Exception {
 
         CompilationUnitTree cut = parser.parse(programFileName, src, info -> logger.error(info.getMessage()));
@@ -132,10 +135,90 @@ public final class CoordinatorMain {
                     nonPartitionedSrc.requestedPartitions(),
                     program.src()));
 
-        // TODO: execute program here on the distributed data
+        if(!(program.src() instanceof DfsSrc dfsSrc))
+            throw new IllegalStateException("Only DfsSrc can be scheduled, but there's still " + program.src());
+
+        final var dfsFilesPrefix = dfsSrc.getDfsFile().name() + "_" + System.currentTimeMillis();
+
+        var currDfsFile = dfsSrc.getDfsFile();
+        var remainingOps = new ArrayList<>(program.ops());
+        for(int step = 0; !remainingOps.isEmpty(); step++) {
+            var currOps = nextOpsBatch(remainingOps);
+            currOps.forEach(_ -> remainingOps.removeFirst());
+
+            int jobId = 0; // TODO
+            DfsFile dstDfsFile = dfs.createPartitionedFile(
+                    dfsFilesPrefix + "_step" + step,
+                    currDfsFile.partitionsNum());
+
+            try (var scope = new JobStructuredTaskScope<@Nullable Object>(currDfsFile.partitionsNum())) {
+                var remainingPartitions = new HashSet<>(currDfsFile.partitions());
+                // Start by the ones that have a close worker
+                currDfsFile.partitions().forEach(partition ->
+                        workerManager.getCloseToDfsNode(partition.dfsNodeName())
+                                .stream()
+                                .min(Comparator.comparingInt(Worker::getCurrentScheduledJobs))
+                                .ifPresent(worker -> {
+                                    remainingPartitions.remove(partition);
+                                    scheduleJobPartition(jobId, scope, worker, currOps, partition, dstDfsFile);
+                                }));
+                // Rest of them
+                remainingPartitions.forEach(partition -> {
+                    var worker = workerManager.getWorkers()
+                            .stream()
+                            .min(Comparator.comparingInt(Worker::getCurrentScheduledJobs))
+                            .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
+                    scheduleJobPartition(jobId, scope, worker, currOps, partition, dstDfsFile);
+                });
+
+                scope.join().result(IOException::new);
+            }
+
+//            if(currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
+//                // TODO: shuffle
+//            }
+
+            currDfsFile = dstDfsFile;
+        }
     }
 
-    private Src partitionFile(String dfsName, int partitionsNum, Src src) throws Exception {
+    private List<Op> nextOpsBatch(List<Op> remainingOps) {
+        var ops = new ArrayList<Op>();
+
+        boolean wasShuffled = false;
+        for(Op op : remainingOps) {
+            if(wasShuffled && op.kind().isRequiresShuffling())
+                return ops;
+
+            wasShuffled = wasShuffled || op.kind().isShuffles();
+        }
+
+        return ops;
+    }
+
+    @SuppressWarnings("resource")
+    private void scheduleJobPartition(int jobId,
+                                      JobStructuredTaskScope<@Nullable Object> scope,
+                                      Worker worker,
+                                      List<Op> ops,
+                                      DfsFilePartitionInfo partition,
+                                      DfsFile resultingFile) {
+        var unschedule = worker.scheduleJob();
+        scope.fork(() -> {
+            var pkt = new ScheduleJobPacket(jobId,
+                    ops,
+                    partition.fileName(), partition.partition(),
+                    resultingFile.name());
+
+            try(var _ = unschedule;
+                var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
+
+                return new JobStructuredTaskScope.PartitionResult<>(partition.partition(), ctx.getPacket());
+            }
+        });
+    }
+
+    private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws Exception {
         var dfsFile = dfs.createPartitionedFile(dfsName, partitionsNum);
 
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
@@ -147,12 +230,21 @@ public final class CoordinatorMain {
 
                 var closestNode = closeNodes.getFirst();
                 scope.fork(() -> {
-                    closestNode.socket().send(new CreateFilePartitionPacket(info.fileName(), info.partition()));
-                    return null;
+                    try(var ctx = closestNode.getSocket().send(
+                            new CreateFilePartitionPacket(info.fileName(), info.partition()),
+                            CreateFilePartitionResultPacket.class
+                    )) {
+                        return switch (ctx.getPacket()) {
+                            case CreateFilePartitionSuccessPacket _ -> null;
+                            case CreateFilePartitionFailurePacket pkt -> throw pkt.exception();
+                        };
+                    }
                 });
             });
 
-            scope.join().throwIfFailed();
+            scope.join().throwIfFailed(ex -> new IOException(
+                    STR."Failed to partition file \{dfsName} in \{partitionsNum}",
+                    ex));
         }
 
         dfs.write(dfsFile, src.loadAll());

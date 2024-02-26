@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 public final class WorkerMain {
 
@@ -42,12 +43,14 @@ public final class WorkerMain {
             mngr.send(new HelloPacket(uuid));
 
             while (!Thread.interrupted()) {
+                // TODO: receive CreateFilePartitionPacket
                 var ctx = mngr.receive(ScheduleJobPacket.class);
                 threadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
                     ScheduleJobPacket job = ctx.getPacket();
                     try {
                         List<CompiledOp> compileOps = Program.compile(engine, job.ops());
-                        List<Tuple2> res = CompiledProgram.execute(compileOps, job.data().stream()).toList();
+                        // TODO: execute properly and write res to dfs
+                        List<Tuple2> res = CompiledProgram.execute(compileOps, Stream.empty()).toList();
 
                         ctx.reply(new JobResultPacket(res));
                     } catch (IOException | ScriptException e) {

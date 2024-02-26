@@ -5,24 +5,26 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.util.List;
 
 public enum OpKind {
-    FLAT_MAP("flatMap"),
+    FLAT_MAP("flatMap", true, false),
     MAP("map"),
     FILTER("filter"),
-    CHANGE_KEY("changeKey"),
-    REDUCE("reduce", true);
+    CHANGE_KEY("changeKey", true, false),
+    REDUCE("reduce", false, true);
 
     public static final @Unmodifiable List<OpKind> VALUES = List.of(values());
 
     private final String name;
+    private final boolean shuffles;
     private final boolean isTerminal;
 
-    OpKind(String name, boolean isTerminal) {
+    OpKind(String name, boolean shuffles, boolean isTerminal) {
         this.name = name;
+        this.shuffles = shuffles;
         this.isTerminal = isTerminal;
     }
 
     OpKind(String name) {
-        this(name, false);
+        this(name, false, false);
     }
 
     public String getName() {
@@ -30,6 +32,14 @@ public enum OpKind {
     }
 
     public boolean isTerminal() {
+        return isTerminal;
+    }
+
+    public boolean isShuffles() {
+        return shuffles;
+    }
+
+    public boolean isRequiresShuffling() {
         return isTerminal;
     }
 
