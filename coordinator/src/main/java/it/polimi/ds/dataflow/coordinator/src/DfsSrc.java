@@ -25,11 +25,6 @@ public final class DfsSrc implements CoordinatorSrc {
     }
 
     @Override
-    public boolean isNonPartitioned() {
-        return false;
-    }
-
-    @Override
     public Stream<Tuple2> loadAll() {
         if(file == null)
             file = dfs.findFile(fileName);

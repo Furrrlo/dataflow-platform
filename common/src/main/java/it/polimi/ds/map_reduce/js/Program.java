@@ -13,22 +13,21 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.BiFunction;
 
-public record Program(Src src, int partitions, List<Op> ops) {
+public record Program(Src src, List<Op> ops) {
 
     @SuppressFBWarnings(
             value = "OCP_OVERLY_CONCRETE_PARAMETER",
             justification =  "Can't make it more general 'cause it's the canonical ctor")
-    public Program(Src src, int partitions, List<Op> ops) {
+    public Program(Src src, List<Op> ops) {
         if(ops.stream().limit(ops.size() - 1).anyMatch(o -> o.kind().isTerminal()))
             throw new IllegalArgumentException("Intermediate instruction is terminal");
 
         this.src = src;
-        this.partitions = partitions;
         this.ops = List.copyOf(ops);
     }
 
     public Program withSrc(Src src) {
-        return new Program(src, partitions, ops);
+        return new Program(src, ops);
     }
 
     public CompiledProgram compile(ScriptEngine engine) throws ScriptException {
@@ -36,7 +35,7 @@ public record Program(Src src, int partitions, List<Op> ops) {
         for (Op op : this.ops) {
             ops.add(compile(engine, op));
         }
-        return new CompiledProgram(src, partitions, ops);
+        return new CompiledProgram(src, ops);
     }
 
     public static List<CompiledOp> compile(ScriptEngine engine, List<Op> ops) throws ScriptException {

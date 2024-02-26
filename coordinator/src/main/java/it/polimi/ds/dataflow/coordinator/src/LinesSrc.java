@@ -6,21 +6,19 @@ import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.stream.Stream;
 
-public final class LinesSrc implements CoordinatorSrc {
+public final class LinesSrc implements NonPartitionedCoordinatorSrc {
 
     private final LocalSrcFileLoader loader;
     private final String fileName;
+    private final int partitions;
 
-    public LinesSrc(LocalSrcFileLoader loader, String fileName) {
+    public LinesSrc(LocalSrcFileLoader loader, String fileName, int partitions) {
         this.loader = loader;
         this.fileName = fileName;
-    }
-
-    @Override
-    public boolean isNonPartitioned() {
-        return true;
+        this.partitions = partitions;
     }
 
     @Override
@@ -41,5 +39,34 @@ public final class LinesSrc implements CoordinatorSrc {
                 throw new UncheckedIOException(e);
             }
         });
+    }
+
+    @Override
+    public int requestedPartitions() {
+        return partitions;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        LinesSrc linesSrc = (LinesSrc) o;
+        return partitions == linesSrc.partitions &&
+                Objects.equals(loader, linesSrc.loader) &&
+                Objects.equals(fileName, linesSrc.fileName);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(loader, fileName, partitions);
+    }
+
+    @Override
+    public String toString() {
+        return "LinesSrc{" +
+                "loader=" + loader +
+                ", fileName='" + fileName + '\'' +
+                ", partitions=" + partitions +
+                '}';
     }
 }

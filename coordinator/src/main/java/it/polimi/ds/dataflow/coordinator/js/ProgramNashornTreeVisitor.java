@@ -14,9 +14,9 @@ import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.IntStream;
 
 @SuppressWarnings({
         "ClassEscapesDefinedScope" // There's no way to get an instance of this class, it can't escape
@@ -35,7 +35,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                 dfs,
                 cut.getLineMap(),
                 State.COMPILATION_UNIT,
-                null, 0, new ArrayList<>()));
+                null, new ArrayList<>()));
     }
 
     private ProgramNashornTreeVisitor() {
@@ -47,41 +47,37 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                          LineMap lineMap,
                          State state,
                          @Nullable CoordinatorSrc src,
-                         int partitions,
                          List<Op> ops) {
         public Ctx transitionState() {
-            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state.next(), src, partitions, ops);
-        }
-
-        public Ctx withPartitions(int partitions) {
-            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state, src, partitions, ops);
+            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state.next(), src, ops);
         }
 
         public Ctx withSrc(CoordinatorSrc src) {
-            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state, src, partitions, ops);
+            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state, src, ops);
         }
     }
 
     private enum State {
-        COMPILATION_UNIT, EXPRESSION, ENGINE_FN_CALLS, OPTION_FN_CALL, SRC_FN_CALL, END;
+        COMPILATION_UNIT, EXPRESSION, ENGINE_FN_CALLS, SRC_FN_CALL, END;
 
         public State next() {
             return switch (this) {
                 case COMPILATION_UNIT -> EXPRESSION;
                 case EXPRESSION -> ENGINE_FN_CALLS;
-                case ENGINE_FN_CALLS -> OPTION_FN_CALL;
-                case OPTION_FN_CALL -> SRC_FN_CALL;
+                case ENGINE_FN_CALLS -> SRC_FN_CALL;
                 case SRC_FN_CALL, END -> END;
             };
         }
     }
 
     @Override
+    @SuppressWarnings("TrailingWhitespacesInTextBlock")
     protected Program throwIllegalState(Tree node, Ctx ctx) {
-        throw new IllegalStateException("Unexpected tree node " + node.getKind() +
-                " (state: " + ctx.state + ") " +
-                " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition()));
+        throw new IllegalStateException(STR."""
+            Unexpected tree node \{node.getKind()} (state: \{ctx.state}) \
+            at line \{ctx.lineMap().getLineNumber(node.getStartPosition())}:\
+            \{ctx.lineMap().getColumnNumber(node.getStartPosition())}
+            """);
     }
 
     @Override
@@ -91,7 +87,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         if(cut.getSourceElements().size() != 1)
             return throwIllegalState(cut, ctx);
 
-        return cut.getSourceElements().get(0).accept(this, ctx.transitionState());
+        return cut.getSourceElements().getFirst().accept(this, ctx.transitionState());
     }
 
     @Override
@@ -104,13 +100,13 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
     @Override
     public Program visitFunctionCall(FunctionCallTree node, Ctx ctx) {
-        return switch (ctx.state) {
-            case ENGINE_FN_CALLS -> visitEngineFunctionCall(node, ctx);
-            case SRC_FN_CALL -> visitSrcFnCall(node, ctx);
-            default -> throwIllegalState(node, ctx);
-        };
+        if(ctx.state != State.ENGINE_FN_CALLS)
+            return throwIllegalState(node, ctx);
+
+        return visitEngineFunctionCall(node, ctx);
     }
 
+    @SuppressWarnings("TrailingWhitespacesInTextBlock")
     @SuppressFBWarnings(
             value = "STT_STRING_PARSING_A_FIELD",
             justification = "This method is parsing source code, so it's doing exactly what's intended")
@@ -118,101 +114,85 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         if(!(node.getFunctionSelect() instanceof MemberSelectTree mst))
             return throwIllegalState(node.getFunctionSelect(), ctx);
 
-        var maybeKind = Arrays.stream(OpKind.values())
+        var maybeKind = OpKind.VALUES.stream()
                 .filter(k -> k.getName().equals(mst.getIdentifier()))
                 .findFirst();
 
-        if(maybeKind.isEmpty()) {
-            if(mst.getIdentifier().equals("partitions"))
-                return visitOptionsFnCall(node, mst, ctx.transitionState());
-
-            throw new IllegalStateException("Unrecognized operator " + mst.getIdentifier() +
-                    " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                    ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition()));
-        }
+        if(maybeKind.isEmpty())
+            return visitSrcFnCall(node, mst, ctx.transitionState());
 
         OpKind kind = maybeKind.get();
         boolean expectsTerminal = ctx.ops.isEmpty();
 
         if(!expectsTerminal && kind.isTerminal())
-            throw new IllegalStateException("Unrecognized operator " + mst.getIdentifier() +
-                    "(expected non-terminal, got terminal)" +
-                    " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                    ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition()));
+            throw new IllegalStateException(STR."""
+                Unrecognized operator \{mst.getIdentifier()} \
+                (expected non-terminal, got terminal) \
+                at line \{ctx.lineMap().getLineNumber(node.getStartPosition())}:\
+                \{ctx.lineMap().getColumnNumber(node.getStartPosition())}
+                """);
 
-        if(node.getArguments().size() != 1 || !(node.getArguments().get(0) instanceof FunctionExpressionTree))
+        if(node.getArguments().size() != 1 || !(node.getArguments().getFirst() instanceof FunctionExpressionTree))
             return throwIllegalState(mst.getExpression(), ctx);
 
         var op = new Op(kind, ctx.sourceCode.substring(
                 (int) mst.getEndPosition(),
-                (int) node.getEndPosition()));
+                (int) node.getEndPosition()
+        ).replace("\r", ""));
         if(ctx.ops.isEmpty())
             ctx.ops.add(op);
         else
-            ctx.ops.add(0, op);
+            ctx.ops.addFirst(op);
 
         return mst.getExpression().accept(this, ctx);
     }
 
-    private Program visitOptionsFnCall(FunctionCallTree node, MemberSelectTree mst, Ctx ctx) {
-        if(node.getArguments().size() != 1)
-            return throwIllegalState(node, ctx);
-
-        if(!(node.getArguments().get(0) instanceof LiteralTree lt) || !(lt.getValue() instanceof Number partitions))
-            throw new IllegalStateException("Expected partitions to be a literal number, got " + node.getKind() +
-                    " (state: " + ctx.state + ") " +
-                    " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                    ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition()));
-
-        return mst.getExpression().accept(
-                this,
-                ctx.withPartitions(partitions.intValue()).transitionState());
-    }
-
-    private Program visitSrcFnCall(FunctionCallTree node, Ctx ctx) {
-        if(!(node.getFunctionSelect() instanceof MemberSelectTree mst))
-            return throwIllegalState(node.getFunctionSelect(), ctx);
-
-        var kind = Arrays.stream(CoordinatorSrc.Kind.values())
+    @SuppressWarnings("TrailingWhitespacesInTextBlock")
+    private Program visitSrcFnCall(FunctionCallTree node, MemberSelectTree mst, Ctx ctx) {
+        var kind = CoordinatorSrc.Kind.VALUES.stream()
                 .filter(k -> k.getMethodIdentifier().equals(mst.getIdentifier()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Unrecognized src operator " + mst.getIdentifier() +
-                        " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                        ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition())));
+                .orElseThrow(() -> new IllegalStateException(STR."""
+                    Unrecognized src operator \{mst.getIdentifier()} \
+                    at line \{ctx.lineMap().getLineNumber(node.getStartPosition())}:\
+                    \{ctx.lineMap().getColumnNumber(node.getStartPosition())}\
+                    """));
 
-        int maxExpectedArgs = switch (kind) {
-            // TODO: declare args on the enum
-            case LINES, DFS -> 1;
-            case CSV -> 2;
-        };
-
-        if(node.getArguments().isEmpty() || node.getArguments().size() > maxExpectedArgs)
+        if(node.getArguments().size() < kind.getMinArgs() || node.getArguments().size() > kind.getMaxArgs())
             return throwIllegalState(mst.getExpression(), ctx);
 
-        if(!(node.getArguments().get(0) instanceof LiteralTree lt) || !(lt.getValue() instanceof String fileName))
-            throw new IllegalStateException("Expected fileName to be a literal string, got " + node.getKind() +
-                    " (state: " + ctx.state + ") " +
-                    " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                    ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition()));
+        final List<Object> parsedArgs = IntStream.range(0, node.getArguments().size()).mapToObj(argIdx -> {
+            final Class<?> expectedType = kind.getArgs().get(argIdx);
+
+            if (!(node.getArguments().get(argIdx) instanceof LiteralTree lt) || !expectedType.isInstance(lt.getValue()))
+                throw new IllegalStateException(STR."""
+                    Expected arg \{argIdx} \
+                    to be a literal \{expectedType}, \
+                    got \{node.getArguments().get(argIdx) instanceof LiteralTree lt
+                        ? lt.getValue()
+                        : node.getArguments().get(argIdx)} \
+                    (state: \{ctx.state}, kind: \{kind}) \
+                    at line \{ctx.lineMap().getLineNumber(node.getStartPosition())}:\
+                    \{ctx.lineMap().getColumnNumber(node.getStartPosition())}
+                    """);
+
+            return lt.getValue();
+        }).toList();
 
         CoordinatorSrc src = switch (kind) {
-            case LINES -> new LinesSrc(ctx.localFileLoader(), fileName);
-            case CSV -> {
-                if(node.getArguments().size() == 1)
-                    yield new CsvSrc(ctx.localFileLoader(), fileName);
-
-                if(!(node.getArguments().get(1) instanceof LiteralTree dlt) ||
-                        !(dlt.getValue() instanceof String delimiter))
-                    throw new IllegalStateException("Expected csv delimiter to be a literal string, got " + node.getKind() +
-                            " (state: " + ctx.state + ") " +
-                            " at line " + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                            ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition()));
-
-                yield new CsvSrc(ctx.localFileLoader(), fileName, delimiter);
-            }
-            // TODO: at some point, make dfs nonnull
-            case DFS -> new DfsSrc(Objects.requireNonNull(ctx.dfs(), "TODO: change this"), fileName);
+            case LINES -> new LinesSrc(ctx.localFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
+            case CSV -> switch (parsedArgs.size()) {
+                case 2 ->  new CsvSrc(ctx.localFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
+                case 3 ->  new CsvSrc(ctx.localFileLoader(),
+                        (String) parsedArgs.getFirst(), (int) parsedArgs.get(1), (String) parsedArgs.get(2));
+                default -> throw new AssertionError(STR."Unexpected parsing error, unrecognized params \{parsedArgs}");
+            };
+            case DFS -> new DfsSrc(
+                    // TODO: at some point, make dfs nonnull
+                    Objects.requireNonNull(ctx.dfs(), "TODO: change this"),
+                    (String) parsedArgs.getFirst());
         };
+
         return mst.getExpression().accept(this, ctx.withSrc(src).transitionState());
     }
 
@@ -224,9 +204,6 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         if(!node.getName().equals("engine"))
             return throwIllegalState(node, ctx);
 
-        return new Program(
-                Objects.requireNonNull(ctx.src(), "Missing source"),
-                ctx.partitions(),
-                ctx.ops());
+        return new Program(Objects.requireNonNull(ctx.src(), "Missing source"), ctx.ops());
     }
 }

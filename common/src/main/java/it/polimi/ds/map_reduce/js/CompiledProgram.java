@@ -9,14 +9,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public record CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
+public record CompiledProgram(Src src, List<CompiledOp> ops) {
 
     @SuppressFBWarnings(
             value = "OCP_OVERLY_CONCRETE_PARAMETER",
             justification =  "Can't make it more general 'cause it's the canonical ctor")
-    public CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
+    public CompiledProgram(Src src, List<CompiledOp> ops) {
         this.src = src;
-        this.partitions = partitions;
         this.ops = List.copyOf(ops);
     }
 

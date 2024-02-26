@@ -1,11 +1,17 @@
 package it.polimi.ds.map_reduce.js;
 
+import org.jetbrains.annotations.Unmodifiable;
+
+import java.util.List;
+
 public enum OpKind {
     FLAT_MAP("flatMap"),
     MAP("map"),
     FILTER("filter"),
     CHANGE_KEY("changeKey"),
     REDUCE("reduce", true);
+
+    public static final @Unmodifiable List<OpKind> VALUES = List.of(values());
 
     private final String name;
     private final boolean isTerminal;

@@ -4,6 +4,7 @@ import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
 import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
 import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
+import it.polimi.ds.dataflow.coordinator.src.NonPartitionedCoordinatorSrc;
 import it.polimi.ds.map_reduce.js.Program;
 import it.polimi.ds.map_reduce.socket.packets.CreateFilePartitionPacket;
 import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
@@ -117,12 +118,12 @@ public final class CoordinatorMain {
             throw new UnsupportedOperationException(STR."Failed to compile \{programFileName}");
         Program program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader, dfs);
 
-        if (program.src().isNonPartitioned())
+        if (program.src() instanceof NonPartitionedCoordinatorSrc nonPartitionedSrc)
             program = program.withSrc(partitionFile(
                     programFileName.endsWith(".js")
                             ? programFileName.substring(0, programFileName.length() - ".js".length())
                             : programFileName,
-                    program.partitions(),
+                    nonPartitionedSrc.requestedPartitions(),
                     program.src()));
 
         // TODO: execute program here on the distributed data
