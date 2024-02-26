@@ -1,5 +1,6 @@
 package it.polimi.ds.dataflow.coordinator.js;
 
+import it.polimi.ds.dataflow.coordinator.dfs.UnimplementedDfs;
 import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
 import it.polimi.ds.dataflow.js.Op;
 import it.polimi.ds.dataflow.js.OpKind;
@@ -34,7 +35,7 @@ class ProgramNashornTreeVisitorTest {
         CompilationUnitTree cut = parser.parse(programFileName, src, System.err::println);
         if (cut == null)
             throw new UnsupportedOperationException(STR."Failed to compile \{programFileName}");
-        var program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader, null);
+        var program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader, new UnimplementedDfs());
 
         assertEquals(
                 new Program(

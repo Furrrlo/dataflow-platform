@@ -28,7 +28,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
     public static Program parse(String src,
                                 CompilationUnitTree cut,
                                 WorkDirFileLoader workDirFileLoader,
-                                @Nullable CoordinatorDfs dfs) {
+                                CoordinatorDfs dfs) {
         return cut.accept(INSTANCE, new Ctx(
                 src,
                 workDirFileLoader,
@@ -43,7 +43,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
     protected record Ctx(String sourceCode,
                          WorkDirFileLoader workDirFileLoader,
-                         @Nullable CoordinatorDfs dfs,
+                         CoordinatorDfs dfs,
                          LineMap lineMap,
                          State state,
                          @Nullable CoordinatorSrc src,
@@ -187,10 +187,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                         (String) parsedArgs.getFirst(), (int) parsedArgs.get(1), (String) parsedArgs.get(2));
                 default -> throw new AssertionError(STR."Unexpected parsing error, unrecognized params \{parsedArgs}");
             };
-            case DFS -> new DfsSrc(
-                    // TODO: at some point, make dfs nonnull
-                    Objects.requireNonNull(ctx.dfs(), "TODO: change this"),
-                    (String) parsedArgs.getFirst());
+            case DFS -> new DfsSrc(ctx.dfs(), (String) parsedArgs.getFirst());
         };
 
         return mst.getExpression().accept(this, ctx.withSrc(src).transitionState());
