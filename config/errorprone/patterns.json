@@ -6,6 +6,10 @@
     {
       "value": "MutableConstantField",
       "because": "I don't want to use guava collections"
+    },
+    {
+      "value": "ImmutableEnumChecker",
+      "because": "I don't want to use guava collections"
     }
   ],
   "error": [
