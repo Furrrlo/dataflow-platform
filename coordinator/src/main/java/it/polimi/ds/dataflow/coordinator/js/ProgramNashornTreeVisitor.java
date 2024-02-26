@@ -8,7 +8,7 @@ import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
 import it.polimi.ds.map_reduce.js.Op;
 import it.polimi.ds.map_reduce.js.OpKind;
 import it.polimi.ds.map_reduce.js.Program;
-import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
+import it.polimi.ds.map_reduce.src.LocalFileLoader;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.*;
@@ -27,7 +27,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
     public static Program parse(String src,
                                 CompilationUnitTree cut,
-                                LocalSrcFileLoader localFileLoader,
+                                LocalFileLoader localFileLoader,
                                 @Nullable CoordinatorDfs dfs) {
         return cut.accept(INSTANCE, new Ctx(
                 src,
@@ -42,7 +42,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
     }
 
     protected record Ctx(String sourceCode,
-                         LocalSrcFileLoader localFileLoader,
+                         LocalFileLoader localFileLoader,
                          @Nullable CoordinatorDfs dfs,
                          LineMap lineMap,
                          State state,
