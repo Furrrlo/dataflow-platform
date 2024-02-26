@@ -16,7 +16,7 @@ public class WorkDirFileLoader {
     private final Path baseDir;
 
     public WorkDirFileLoader(Path baseDir) {
-        this.baseDir = baseDir;
+        this.baseDir = baseDir.toAbsolutePath().normalize();
     }
 
     public InputStream loadResourceAsStream(String fileName) throws IOException {
@@ -40,7 +40,7 @@ public class WorkDirFileLoader {
     private Path ensureNoFileTraversal(String fileName) {
         Path path = baseDir.resolve(fileName).normalize();
         if(!path.startsWith(baseDir))
-            throw new IllegalStateException(STR."Attempted file traversal \{path}");
+            throw new IllegalStateException(STR."Attempted file traversal \{path.toAbsolutePath()}");
         return path;
     }
 }
