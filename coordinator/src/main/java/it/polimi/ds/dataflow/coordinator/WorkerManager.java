@@ -3,6 +3,7 @@ package it.polimi.ds.dataflow.coordinator;
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManagerImpl;
 import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.Closeable;
@@ -13,8 +14,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Predicate;
 
-public class WorkerManager implements Closeable {
+public final class WorkerManager implements Closeable {
 
     private final ServerSocket socket;
     private final ExecutorService threadPool;
@@ -23,7 +25,7 @@ public class WorkerManager implements Closeable {
 
     public static WorkerManager listen(ExecutorService threadPool, int port) throws IOException {
         WorkerManager mngr = new WorkerManager(threadPool, new ServerSocket(port));
-        threadPool.submit(mngr::execute);
+        threadPool.execute(mngr::execute);
         return mngr;
     }
 
@@ -73,9 +75,13 @@ public class WorkerManager implements Closeable {
         }
     }
 
+    @SuppressFBWarnings({"IMPROPER_UNICODE"}) // Not security sensitive
     public @Unmodifiable List<Worker> getCloseToDfsNode(String dfsNode) {
+        // This is weird, but it's to avoid having spotbugs
+        // report the issue on the lambda where I cannot suppress it
+        Predicate<String> equalsIgnoreCase = dfsNode::equalsIgnoreCase;
         return workers.stream()
-                .filter(w -> w.dfsNodeName().equalsIgnoreCase(dfsNode))
+                .filter(w -> equalsIgnoreCase.test(w.dfsNodeName()))
                 .toList();
     }
 }

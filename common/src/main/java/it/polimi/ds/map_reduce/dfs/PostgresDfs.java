@@ -3,8 +3,9 @@ package it.polimi.ds.map_reduce.dfs;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import it.polimi.ds.map_reduce.Tuple2;
-import org.jooq.*;
+import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jooq.Record;
+import org.jooq.*;
 import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
@@ -12,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.function.Function;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -30,36 +31,43 @@ public class PostgresDfs implements Dfs {
 
     private final @Nullable String coordinatorName;
 
-    public PostgresDfs(String coordinatorName, Function<HikariConfig, HikariConfig> configurator) {
+    public PostgresDfs(String coordinatorName, Consumer<HikariConfig> configurator) {
         this(coordinatorName, new JacksonTuple2Serde(), configurator);
     }
 
     public PostgresDfs(String coordinatorName,
                        Tuple2JsonSerde serde,
-                       Function<HikariConfig, HikariConfig> configurator) {
+                       Consumer<HikariConfig> configurator) {
         this(coordinatorName, serde, configurator, null);
     }
 
-    protected PostgresDfs(Function<HikariConfig, HikariConfig> configurator) {
+    protected PostgresDfs(Consumer<HikariConfig> configurator) {
         this(new JacksonTuple2Serde(), configurator);
     }
 
     protected PostgresDfs(Tuple2JsonSerde serde,
-                          Function<HikariConfig, HikariConfig> configurator) {
+                          Consumer<HikariConfig> configurator) {
         this(null, serde, configurator, null);
     }
 
     private PostgresDfs(@Nullable String coordinatorName,
                         Tuple2JsonSerde serde,
-                        Function<HikariConfig, HikariConfig> configurator,
+                        Consumer<HikariConfig> configurator,
                         @SuppressWarnings("unused") @Nullable Void unused) {
         this.coordinatorName = coordinatorName;
         this.serde = serde;
-        this.dataSource = new HikariDataSource(configurator.apply(new HikariConfig()));
+
+        var config = new HikariConfig();
+        configurator.accept(config);
+        this.dataSource = new HikariDataSource(config);
+
         this.ctx = DSL.using(dataSource, SQLDialect.POSTGRES);
     }
 
     @Override
+    @SuppressFBWarnings(
+            value = "BC_VACUOUS_INSTANCEOF",
+            justification = "Don't want to have to declare it as a HikariDataSource")
     public void close() throws IOException {
         if(dataSource instanceof Closeable closeableDs)
             closeableDs.close();
@@ -123,11 +131,11 @@ public class PostgresDfs implements Dfs {
                                 .where(relname.like(STR."\{name}_%"))
                                 .stream()
                                 .map(r -> new TmpTableData(r.get(relname), r.get(srvname), false)))
-                .filter(r -> r.tablename
+                .filter(r -> r.tablename()
                         .substring(name.length() + "_".length())
                         .matches("0|[1-9][0-9]*"))
                 .map(r -> {
-                    var currRelName = r.tablename;
+                    var currRelName = r.tablename();
 
                     final int partition;
                     try {
@@ -149,11 +157,11 @@ public class PostgresDfs implements Dfs {
 
     @Override
     public void writeInPartition(DfsFile file, Tuple2 tuple, int partition) {
-        var isLocal = file.partitions().stream()
+        boolean isLocal = file.partitions().stream()
                 .filter(p -> p.partition() == partition)
                 .findFirst()
                 .map(DfsFilePartitionInfo::isLocal)
-                .orElse(false);
+                .orElse(Boolean.FALSE);
 
         var table = isLocal
                 ? table(name(STR."\{file.name()}_\{partition}"))

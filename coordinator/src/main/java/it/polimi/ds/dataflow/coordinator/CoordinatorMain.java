@@ -26,11 +26,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.StructuredTaskScope;
 
+@SuppressFBWarnings({
+        "LO_SUSPECT_LOG_PARAMETER", // In order to avoid static initialization before main is called
+        "HARD_CODE_PASSWORD" // TODO: load the credentials from somewhere
+})
 public final class CoordinatorMain {
 
     private final LocalSrcFileLoader fileLoader;
     private final Scanner in;
     private final Parser parser;
+    @SuppressWarnings({"FieldCanBeLocal", "unused"})
+    @SuppressFBWarnings("FCBL_FIELD_COULD_BE_LOCAL")
     private final ExecutorService threadPool;
     private final CoordinatorDfs dfs;
     private final WorkerManager workerManager;
@@ -70,7 +76,6 @@ public final class CoordinatorMain {
                     ds.setPassword("password");
                     ds.setDatabaseName("postgres");
                     config.setDataSource(ds);
-                    return config;
                 });
                 WorkerManager workerManager = WorkerManager.listen(threadPool, 6666)
         ) {
@@ -111,6 +116,7 @@ public final class CoordinatorMain {
         }
     }
 
+    @SuppressFBWarnings("DLS_DEAD_LOCAL_STORE") // TODO: remove
     private void executeProgram(String programFileName, String src) throws Exception {
 
         CompilationUnitTree cut = parser.parse(programFileName, src, info -> logger.error(info.getMessage()));

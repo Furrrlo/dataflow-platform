@@ -26,7 +26,7 @@
     "/>
     </Match>
     <!-- For this project it does not matter -->
-    <Match><Bug pattern="UNENCRYPTED_SOCKET"/></Match>
+    <Match><Bug pattern="UNENCRYPTED_SOCKET,UNENCRYPTED_SERVER_SOCKET,MDM_PROMISCUOUS_SERVERSOCKET"/></Match>
     <!-- Used by the project, needs to be protected with filters -->
     <Match><Bug pattern="OBJECT_DESERIALIZATION"/></Match>
     <!-- Used by the project, needs to be protected with filters -->

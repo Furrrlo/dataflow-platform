@@ -9,6 +9,7 @@ import it.polimi.ds.map_reduce.js.Program;
 import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
 import it.polimi.ds.map_reduce.socket.packets.JobResultPacket;
 import it.polimi.ds.map_reduce.socket.packets.ScheduleJobPacket;
+import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
 import it.polimi.ds.map_reduce.utils.ThreadPools;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 
@@ -16,42 +17,44 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
-@SuppressWarnings("unused") //TODO: remove
 public final class WorkerMain {
-    private static final UUID uuid = UuidHandler.getUUID();
-    private static final ExecutorService threadPool = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("worker-", 0).factory());
 
-    @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP", "unused"})
+    private WorkerMain() {
+    }
+
+    @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP"})
     public static void main(String[] args) throws IOException {
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
+        final LocalSrcFileLoader fileLoader = new LocalSrcFileLoader(Paths.get("./"));
+        final ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
 
-        try (WorkerSocketManager mngr = new WorkerSocketManagerImpl(new Socket("127.0.0.1", 6666))) {
+        final UUID uuid = UuidHandler.getUuid(fileLoader);
+        try (ExecutorService threadPool = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
+                .name("worker-", 0)
+                .factory());
+             WorkerSocketManager mngr = new WorkerSocketManagerImpl(new Socket("127.0.0.1", 6666))) {
+
             mngr.send(new HelloPacket(uuid));
 
             while (!Thread.interrupted()) {
                 var ctx = mngr.receive(ScheduleJobPacket.class);
-                Future<?> taskJobExecution = threadPool.submit(ThreadPools.giveNameToTask("[job-execution]", () -> {
-                            ScheduleJobPacket job = ctx.getPacket();
-                            try {
-                                List<CompiledOp> compileOps = Program.compile(engine, job.ops());
-                                List<Tuple2> res = CompiledProgram.execute(compileOps, job.data().stream()).toList();
+                threadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
+                    ScheduleJobPacket job = ctx.getPacket();
+                    try {
+                        List<CompiledOp> compileOps = Program.compile(engine, job.ops());
+                        List<Tuple2> res = CompiledProgram.execute(compileOps, job.data().stream()).toList();
 
-                                ctx.reply(new JobResultPacket(res));
-                            } catch (IOException | ScriptException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
-                );
-
+                        ctx.reply(new JobResultPacket(res));
+                    } catch (IOException | ScriptException e) {
+                        throw new RuntimeException(e); // TODO: handle errors
+                    }
+                }));
             }
         }
-
-        threadPool.shutdown();
     }
 }

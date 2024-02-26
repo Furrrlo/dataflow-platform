@@ -89,7 +89,6 @@ class PostgresCoordinatorDfsTest {
             ds.setPassword(COORDINATOR_NODE.getPassword());
             ds.setDatabaseName(COORDINATOR_NODE.getDatabaseName());
             config.setDataSource(ds);
-            return config;
         });
 
         record TempWorker(String name, PostgreSQLContainer<?> container, Consumer<Worker> workerSetter) {
@@ -106,7 +105,6 @@ class PostgresCoordinatorDfsTest {
             ds.setDatabaseName(w.container.getDatabaseName());
             return new Worker(w.name, w.container, ds, new PostgresDfs("coordinator", serde, config -> {
                 config.setDataSource(ds);
-                return config;
             }));
         }).toList();
 

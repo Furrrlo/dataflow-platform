@@ -1,59 +1,59 @@
 package it.polimi.ds.dataflow.worker;
 
 import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
+import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.UUID;
 
-public class UuidHandler {
-    private static final String uuidFileName = "uuid-storage.txt";
+public final class UuidHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(UuidHandler.class);
+    private static final String DEFAULT_UUID_FILE_NAME = "uuid-storage.txt";
 
-    public UuidHandler() {
+    private UuidHandler() {
     }
 
-    public static UUID getUUID() {
-        final LocalSrcFileLoader fileLoader = new LocalSrcFileLoader(Paths.get("./"));
-        UUID uuid;
+    public static UUID getUuid(LocalSrcFileLoader fileLoader) throws IOException {
+        try {
+            return getUuid(fileLoader, DEFAULT_UUID_FILE_NAME);
+        } catch (IOException ex) {
+            throw new IOException("Failed to get or create UUID", ex);
+        }
+    }
+
+    @VisibleForTesting
+    @SuppressWarnings("SameParameterValue")
+    static UUID getUuid(LocalSrcFileLoader fileLoader, String uuidFileName) throws IOException {
         if (!fileLoader.exists(uuidFileName)) {
             LOGGER.trace("File creation...");
             fileLoader.createNewFile(uuidFileName);
             LOGGER.trace("{} file created", uuidFileName);
-            uuid = createNewUuid();
-        } else {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileLoader.loadAsStream(uuidFileName), StandardCharsets.UTF_8))) {
-                uuid = UUID.fromString(reader.readLine());
-                LOGGER.trace("UUID read from existing file");
-            } catch (IOException e) {
-                LOGGER.trace("Failed to read worker's UUID from {} file", uuidFileName);
-                throw new RuntimeException(e);
-            }
+            return createNewUuid();
         }
-        return uuid;
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileLoader.loadAsStream(DEFAULT_UUID_FILE_NAME), StandardCharsets.UTF_8))) {
+            var uuid = UUID.fromString(reader.readLine());
+            LOGGER.trace("UUID read from existing file: {}", uuid);
+            return uuid;
+        }
     }
 
-    private static UUID createNewUuid() {
+    private static UUID createNewUuid() throws IOException {
         UUID uuid = UUID.randomUUID();
-        try (BufferedWriter fileWriter = Files.newBufferedWriter(Path.of(uuidFileName),StandardCharsets.UTF_8)) {
-            fileWriter.write(uuid + "\n");
-            fileWriter.flush();
+        try (BufferedWriter fileWriter = Files.newBufferedWriter(
+                Path.of(DEFAULT_UUID_FILE_NAME),
+                StandardCharsets.UTF_8)) {
+
+            fileWriter.write(uuid.toString());
+            fileWriter.newLine();
             LOGGER.trace("UUID generated");
-        } catch (IOException e) {
-            LOGGER.trace("Failed to write worker's UUID into {} file", uuidFileName);
-            throw new RuntimeException(e);
         }
         return uuid;
     }
-
-
 }
