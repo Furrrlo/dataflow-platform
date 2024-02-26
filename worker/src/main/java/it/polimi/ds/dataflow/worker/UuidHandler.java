@@ -30,26 +30,24 @@ public final class UuidHandler {
     @VisibleForTesting
     @SuppressWarnings("SameParameterValue")
     static UUID getUuid(LocalFileLoader fileLoader, String uuidFileName) throws IOException {
-        if (!fileLoader.exists(uuidFileName)) {
+        final Path uuidFile = fileLoader.resolvePath(uuidFileName);
+        if (!Files.exists(uuidFile)) {
             LOGGER.trace("File creation...");
-            fileLoader.createNewFile(uuidFileName);
-            LOGGER.trace("{} file created", uuidFileName);
-            return createNewUuid();
+            Files.createFile(uuidFile);
+            LOGGER.trace("{} file created", uuidFile.toAbsolutePath());
+            return createNewUuid(uuidFile);
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileLoader.loadAsStream(DEFAULT_UUID_FILE_NAME), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = Files.newBufferedReader(uuidFile, StandardCharsets.UTF_8)) {
             var uuid = UUID.fromString(reader.readLine());
             LOGGER.trace("UUID read from existing file: {}", uuid);
             return uuid;
         }
     }
 
-    private static UUID createNewUuid() throws IOException {
+    private static UUID createNewUuid(Path uuidFile) throws IOException {
         UUID uuid = UUID.randomUUID();
-        try (BufferedWriter fileWriter = Files.newBufferedWriter(
-                Path.of(DEFAULT_UUID_FILE_NAME),
-                StandardCharsets.UTF_8)) {
-
+        try (BufferedWriter fileWriter = Files.newBufferedWriter(uuidFile, StandardCharsets.UTF_8)) {
             fileWriter.write(uuid.toString());
             fileWriter.newLine();
             LOGGER.trace("UUID generated");

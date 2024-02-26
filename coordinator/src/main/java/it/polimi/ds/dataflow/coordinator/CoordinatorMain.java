@@ -96,13 +96,13 @@ public final class CoordinatorMain {
             logger.info("Insert the program file path: ");
             String programFileName = in.nextLine();
 
-            if (!fileLoader.exists(programFileName)) {
+            if (!fileLoader.resourceExists(programFileName)) {
                 logger.error("File not found");
                 continue;
             }
 
             String src;
-            try (InputStream is = fileLoader.loadAsStream(programFileName)) {
+            try (InputStream is = fileLoader.loadResourceAsStream(programFileName)) {
                 src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
 

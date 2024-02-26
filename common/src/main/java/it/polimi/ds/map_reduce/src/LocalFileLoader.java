@@ -19,7 +19,7 @@ public class LocalFileLoader {
         this.baseDir = baseDir;
     }
 
-    public InputStream loadAsStream(String fileName) throws IOException {
+    public InputStream loadResourceAsStream(String fileName) throws IOException {
         final InputStream inJarIs = LocalFileLoader.class.getResourceAsStream(fileName);
         if (inJarIs != null)
             return inJarIs;
@@ -28,14 +28,13 @@ public class LocalFileLoader {
     }
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-    public boolean exists(String file) {
+    public boolean resourceExists(String file) {
         final URL inJarIs = LocalFileLoader.class.getResource(file);
         return inJarIs != null || Files.exists(ensureNoFileTraversal(file));
     }
 
-    public void createNewFile(String fileName) throws IOException {
-        final Path path = ensureNoFileTraversal(fileName);
-        Files.createFile(path);
+    public Path resolvePath(String path) {
+        return ensureNoFileTraversal(path);
     }
 
     private Path ensureNoFileTraversal(String fileName) {

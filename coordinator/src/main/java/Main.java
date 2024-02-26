@@ -32,7 +32,7 @@ public final class Main {
         ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
 
         String src;
-        try(InputStream is = fileLoader.loadAsStream(programFileName)) {
+        try(InputStream is = fileLoader.loadResourceAsStream(programFileName)) {
             src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
 

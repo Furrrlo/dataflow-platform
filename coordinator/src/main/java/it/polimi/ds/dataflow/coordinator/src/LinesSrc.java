@@ -28,7 +28,7 @@ public final class LinesSrc implements NonPartitionedCoordinatorSrc {
             justification = "The stream is closeable and closes the Reader")
     public Stream<Tuple2> loadAll() throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(
-                loader.loadAsStream(fileName),
+                loader.loadResourceAsStream(fileName),
                 StandardCharsets.UTF_8));
 
         final Stream<Tuple2> stream = br.lines().map(s -> new Tuple2(s, null));

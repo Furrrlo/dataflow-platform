@@ -27,7 +27,7 @@ class ProgramNashornTreeVisitorTest {
         Parser parser = Parser.create("--language=es6");
 
         String src;
-        try(InputStream is = fileLoader.loadAsStream(programFileName)) {
+        try(InputStream is = fileLoader.loadResourceAsStream(programFileName)) {
             src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
 
