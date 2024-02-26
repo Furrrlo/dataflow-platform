@@ -9,7 +9,7 @@ import it.polimi.ds.map_reduce.js.Program;
 import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
 import it.polimi.ds.map_reduce.socket.packets.JobResultPacket;
 import it.polimi.ds.map_reduce.socket.packets.ScheduleJobPacket;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import it.polimi.ds.map_reduce.utils.ThreadPools;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 
@@ -30,7 +30,7 @@ public final class WorkerMain {
 
     @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP"})
     public static void main(String[] args) throws IOException {
-        final LocalFileLoader fileLoader = new LocalFileLoader(Paths.get("./"));
+        final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
         final ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
 
         final UUID uuid = UuidHandler.getUuid(fileLoader);

@@ -11,16 +11,16 @@ import java.nio.file.Path;
 @SuppressFBWarnings(
         value = "PATH_TRAVERSAL_IN",
         justification = "All path are manually checked for traversal issues")
-public class LocalFileLoader {
+public class WorkDirFileLoader {
 
     private final Path baseDir;
 
-    public LocalFileLoader(Path baseDir) {
+    public WorkDirFileLoader(Path baseDir) {
         this.baseDir = baseDir;
     }
 
     public InputStream loadResourceAsStream(String fileName) throws IOException {
-        final InputStream inJarIs = LocalFileLoader.class.getResourceAsStream(fileName);
+        final InputStream inJarIs = WorkDirFileLoader.class.getResourceAsStream(fileName);
         if (inJarIs != null)
             return inJarIs;
 
@@ -29,7 +29,7 @@ public class LocalFileLoader {
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public boolean resourceExists(String file) {
-        final URL inJarIs = LocalFileLoader.class.getResource(file);
+        final URL inJarIs = WorkDirFileLoader.class.getResource(file);
         return inJarIs != null || Files.exists(ensureNoFileTraversal(file));
     }
 

@@ -1,7 +1,7 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
 import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 
@@ -11,16 +11,16 @@ import java.util.stream.Stream;
 @SuppressFBWarnings("FCBL_FIELD_COULD_BE_LOCAL") // TODO: remove
 public final class CsvSrc implements NonPartitionedCoordinatorSrc {
 
-    private final LocalFileLoader loader;
+    private final WorkDirFileLoader loader;
     private final String fileName;
     private final int partitions;
     private final @Nullable String delimiter;
 
-    public CsvSrc(LocalFileLoader loader, String fileName, int partitions) {
+    public CsvSrc(WorkDirFileLoader loader, String fileName, int partitions) {
         this(loader, fileName, partitions, null);
     }
 
-    public CsvSrc(LocalFileLoader loader, String fileName, int partitions, @Nullable String delimiter) {
+    public CsvSrc(WorkDirFileLoader loader, String fileName, int partitions, @Nullable String delimiter) {
         this.loader = loader;
         this.fileName = fileName;
         this.partitions = partitions;

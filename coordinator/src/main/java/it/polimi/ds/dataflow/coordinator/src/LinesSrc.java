@@ -1,7 +1,7 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
 import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 
 import java.io.*;
@@ -11,11 +11,11 @@ import java.util.stream.Stream;
 
 public final class LinesSrc implements NonPartitionedCoordinatorSrc {
 
-    private final LocalFileLoader loader;
+    private final WorkDirFileLoader loader;
     private final String fileName;
     private final int partitions;
 
-    public LinesSrc(LocalFileLoader loader, String fileName, int partitions) {
+    public LinesSrc(WorkDirFileLoader loader, String fileName, int partitions) {
         this.loader = loader;
         this.fileName = fileName;
         this.partitions = partitions;

@@ -1,6 +1,6 @@
 package it.polimi.ds.dataflow.worker;
 
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +19,7 @@ public final class UuidHandler {
     private UuidHandler() {
     }
 
-    public static UUID getUuid(LocalFileLoader fileLoader) throws IOException {
+    public static UUID getUuid(WorkDirFileLoader fileLoader) throws IOException {
         try {
             return getUuid(fileLoader, DEFAULT_UUID_FILE_NAME);
         } catch (IOException ex) {
@@ -29,7 +29,7 @@ public final class UuidHandler {
 
     @VisibleForTesting
     @SuppressWarnings("SameParameterValue")
-    static UUID getUuid(LocalFileLoader fileLoader, String uuidFileName) throws IOException {
+    static UUID getUuid(WorkDirFileLoader fileLoader, String uuidFileName) throws IOException {
         final Path uuidFile = fileLoader.resolvePath(uuidFileName);
         if (!Files.exists(uuidFile)) {
             LOGGER.trace("File creation...");

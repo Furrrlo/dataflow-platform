@@ -7,7 +7,7 @@ import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
 import it.polimi.ds.dataflow.coordinator.src.NonPartitionedCoordinatorSrc;
 import it.polimi.ds.map_reduce.js.Program;
 import it.polimi.ds.map_reduce.socket.packets.CreateFilePartitionPacket;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import it.polimi.ds.map_reduce.src.Src;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
@@ -32,7 +32,7 @@ import java.util.concurrent.StructuredTaskScope;
 })
 public final class CoordinatorMain {
 
-    private final LocalFileLoader fileLoader;
+    private final WorkDirFileLoader fileLoader;
     private final Scanner in;
     private final Parser parser;
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
@@ -42,7 +42,7 @@ public final class CoordinatorMain {
     private final WorkerManager workerManager;
     private final Logger logger;
 
-    public CoordinatorMain(LocalFileLoader fileLoader,
+    public CoordinatorMain(WorkDirFileLoader fileLoader,
                            Scanner in,
                            Parser parser,
                            ExecutorService threadPool,
@@ -61,7 +61,7 @@ public final class CoordinatorMain {
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
     public static void main(String[] args) throws IOException, InterruptedException {
 
-        final LocalFileLoader fileLoader = new LocalFileLoader(Paths.get("./"));
+        final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
         final Scanner in = new Scanner(System.in, System.console() != null ?
                 System.console().charset() :
                 StandardCharsets.UTF_8);

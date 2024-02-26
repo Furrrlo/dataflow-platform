@@ -4,7 +4,7 @@ import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
 import it.polimi.ds.map_reduce.js.Op;
 import it.polimi.ds.map_reduce.js.OpKind;
 import it.polimi.ds.map_reduce.js.Program;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import org.junit.jupiter.api.Test;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
@@ -21,7 +21,7 @@ class ProgramNashornTreeVisitorTest {
 
     @Test
     void parse() throws IOException {
-        final LocalFileLoader fileLoader = new LocalFileLoader(Paths.get("./"));
+        final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
         final String programFileName = "word-count.js";
 
         Parser parser = Parser.create("--language=es6");

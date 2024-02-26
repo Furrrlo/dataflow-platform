@@ -8,7 +8,7 @@ import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
 import it.polimi.ds.map_reduce.js.Op;
 import it.polimi.ds.map_reduce.js.OpKind;
 import it.polimi.ds.map_reduce.js.Program;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.*;
@@ -27,11 +27,11 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
     public static Program parse(String src,
                                 CompilationUnitTree cut,
-                                LocalFileLoader localFileLoader,
+                                WorkDirFileLoader workDirFileLoader,
                                 @Nullable CoordinatorDfs dfs) {
         return cut.accept(INSTANCE, new Ctx(
                 src,
-                localFileLoader,
+                workDirFileLoader,
                 dfs,
                 cut.getLineMap(),
                 State.COMPILATION_UNIT,
@@ -42,18 +42,18 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
     }
 
     protected record Ctx(String sourceCode,
-                         LocalFileLoader localFileLoader,
+                         WorkDirFileLoader workDirFileLoader,
                          @Nullable CoordinatorDfs dfs,
                          LineMap lineMap,
                          State state,
                          @Nullable CoordinatorSrc src,
                          List<Op> ops) {
         public Ctx transitionState() {
-            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state.next(), src, ops);
+            return new Ctx(sourceCode, workDirFileLoader, dfs, lineMap, state.next(), src, ops);
         }
 
         public Ctx withSrc(CoordinatorSrc src) {
-            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state, src, ops);
+            return new Ctx(sourceCode, workDirFileLoader, dfs, lineMap, state, src, ops);
         }
     }
 
@@ -180,10 +180,10 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         }).toList();
 
         CoordinatorSrc src = switch (kind) {
-            case LINES -> new LinesSrc(ctx.localFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
+            case LINES -> new LinesSrc(ctx.workDirFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
             case CSV -> switch (parsedArgs.size()) {
-                case 2 ->  new CsvSrc(ctx.localFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
-                case 3 ->  new CsvSrc(ctx.localFileLoader(),
+                case 2 ->  new CsvSrc(ctx.workDirFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
+                case 3 ->  new CsvSrc(ctx.workDirFileLoader(),
                         (String) parsedArgs.getFirst(), (int) parsedArgs.get(1), (String) parsedArgs.get(2));
                 default -> throw new AssertionError(STR."Unexpected parsing error, unrecognized params \{parsedArgs}");
             };

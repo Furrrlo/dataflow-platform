@@ -1,5 +1,5 @@
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
-import it.polimi.ds.map_reduce.src.LocalFileLoader;
+import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
 import it.polimi.ds.map_reduce.Tuple2;
 import it.polimi.ds.map_reduce.js.CompiledProgram;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
@@ -25,7 +25,7 @@ public final class Main {
 
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
     public static void main(String[] args) throws IOException, ScriptException {
-        final LocalFileLoader fileLoader = new LocalFileLoader(Paths.get("./"));
+        final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
         final String programFileName = "word-count.js";
 
         Parser parser = Parser.create("--language=es6");
