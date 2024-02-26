@@ -19,11 +19,16 @@ public final class LinesSrc implements CoordinatorSrc {
     }
 
     @Override
+    public boolean isNonPartitioned() {
+        return true;
+    }
+
+    @Override
     @SuppressWarnings("PMD.CloseResource")
     @SuppressFBWarnings(
             value = "OS_OPEN_STREAM",
             justification = "The stream is closeable and closes the Reader")
-    public Stream<Tuple2> loadInitial() throws IOException {
+    public Stream<Tuple2> loadAll() throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(
                 loader.loadAsStream(fileName),
                 StandardCharsets.UTF_8));

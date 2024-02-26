@@ -39,7 +39,7 @@ public final class Main {
         CompilationUnitTree cut = parser.parse(programFileName, src, System.err::println);
         if (cut == null)
             throw new UnsupportedOperationException("Failed to compile " + programFileName);
-        CompiledProgram program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader).compile(engine);
+        CompiledProgram program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader, null).compile(engine);
 
         System.out.println(program.execute()
                 .stream()

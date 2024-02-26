@@ -7,5 +7,7 @@ import java.util.stream.Stream;
 
 public interface Src {
 
-    Stream<Tuple2> loadInitial() throws IOException;
+    boolean isNonPartitioned();
+
+    Stream<Tuple2> loadAll() throws IOException;
 }

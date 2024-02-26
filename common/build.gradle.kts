@@ -7,6 +7,8 @@ dependencies {
     api(libs.nashorn)
     api(libs.slf4j)
 
-    // Postgres
-    //api("org.postgresql:postgresql:42.7.2")
+    // DB stuff
+    api(libs.hikaricp) // Connection pooling
+    api(libs.postgresql) // JDBC driver
+    api(libs.jooq) // nice DSL
 }

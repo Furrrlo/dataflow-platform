@@ -27,6 +27,10 @@ public record Program(Src src, int partitions, List<Op> ops) {
         this.ops = List.copyOf(ops);
     }
 
+    public Program withSrc(Src src) {
+        return new Program(src, partitions, ops);
+    }
+
     public CompiledProgram compile(ScriptEngine engine) throws ScriptException {
         List<CompiledOp> ops = new ArrayList<>(this.ops.size());
         for (Op op : this.ops) {

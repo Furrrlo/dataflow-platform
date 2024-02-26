@@ -21,7 +21,7 @@ public record CompiledProgram(Src src, int partitions, List<CompiledOp> ops) {
     }
 
     public List<Tuple2> execute() throws IOException {
-        try(Stream<Tuple2> stream = src.loadInitial()) {
+        try(Stream<Tuple2> stream = src.loadAll()) {
             return execute(ops, stream).toList();
         }
     }

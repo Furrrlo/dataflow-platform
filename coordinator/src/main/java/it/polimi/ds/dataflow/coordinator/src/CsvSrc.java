@@ -25,9 +25,13 @@ public final class CsvSrc implements CoordinatorSrc {
         this.delimiter = delimiter;
     }
 
+    @Override
+    public boolean isNonPartitioned() {
+        return true;
+    }
 
     @Override
-    public Stream<Tuple2> loadInitial() {
+    public Stream<Tuple2> loadAll() {
         throw new IllegalStateException("TODO");
     }
 }

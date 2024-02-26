@@ -18,9 +18,22 @@ subprojects {
     dependencies {
         testImplementation(platform(theLibs.junit.bom))
         testImplementation(theLibs.junit.jupiter)
+        testImplementation(theLibs.bundles.testcontainers) {
+            exclude(group = theLibs.junit4.map { it.group }.get())
+        }
+
     }
 
-    tasks.named<Test>("test") {
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.add("--enable-preview")
+    }
+
+    tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+        jvmArgs("--enable-preview")
+    }
+
+    tasks.withType<JavaExec>().configureEach {
+        jvmArgs("--enable-preview")
     }
 }

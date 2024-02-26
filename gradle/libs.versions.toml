@@ -1,5 +1,6 @@
 [versions]
 junit = "5.9.1"
+testcontainers = "1.19.6"
 
 errorprone = "2.25.0"
 spotbugs = "4.8.3"
@@ -7,6 +8,9 @@ pmd = "7.0.0-rc4"
 
 [libraries]
 nashorn = "org.openjdk.nashorn:nashorn-core:15.4"
+jooq = "org.jooq:jooq:3.19.4"
+postgresql = "org.postgresql:postgresql:42.7.2"
+hikaricp = "com.zaxxer:HikariCP:5.1.0"
 
 # Logging stuff
 slf4j = "org.slf4j:slf4j-api:2.0.12"
@@ -19,6 +23,11 @@ annotations-errorprone = { group="com.google.errorprone", name="error_prone_anno
 # Test
 junit-bom = { group="org.junit", name="junit-bom", version.ref="junit" }
 junit-jupiter = { group="org.junit.jupiter", name="junit-jupiter" }
+junit4 = { group="junit", name="junit" }
+testcontainers-core = { group="org.testcontainers", name="testcontainers", version.ref="testcontainers"}
+testcontainers-junit = { group="org.testcontainers", name="junit-jupiter", version.ref="testcontainers"}
+testcontainers-junit4-mock = "io.quarkus:quarkus-junit4-mock:3.8.0"
+testcontainers-postgres = { group="org.testcontainers", name="postgresql", version.ref="testcontainers" }
 
 # Code Quality stuff
 cq-errorprone-core = { group="com.google.errorprone", name="error_prone_core", version.ref="errorprone" }
@@ -36,3 +45,4 @@ plgns-cq-pmd-java = { module = "net.sourceforge.pmd:pmd-java", version.ref = "pm
 
 [bundles]
 plgns-cq-pmd = ["plgns-cq-pmd-core", "plgns-cq-pmd-ant", "plgns-cq-pmd-java"]
+testcontainers = [ "testcontainers-core", "testcontainers-junit", "testcontainers-junit4-mock", "testcontainers-postgres" ]

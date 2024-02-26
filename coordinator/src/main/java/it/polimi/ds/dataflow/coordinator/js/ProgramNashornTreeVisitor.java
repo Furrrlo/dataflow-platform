@@ -1,12 +1,14 @@
 package it.polimi.ds.dataflow.coordinator.js;
 
-import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
+import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
+import it.polimi.ds.dataflow.coordinator.src.CoordinatorSrc;
+import it.polimi.ds.dataflow.coordinator.src.CsvSrc;
+import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
+import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
 import it.polimi.ds.map_reduce.js.Op;
 import it.polimi.ds.map_reduce.js.OpKind;
 import it.polimi.ds.map_reduce.js.Program;
-import it.polimi.ds.dataflow.coordinator.src.CsvSrc;
-import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
-import it.polimi.ds.dataflow.coordinator.src.CoordinatorSrc;
+import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.*;
@@ -23,10 +25,14 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
     private static final ProgramNashornTreeVisitor INSTANCE = new ProgramNashornTreeVisitor();
 
-    public static Program parse(String src, CompilationUnitTree cut, LocalSrcFileLoader localFileLoader) {
+    public static Program parse(String src,
+                                CompilationUnitTree cut,
+                                LocalSrcFileLoader localFileLoader,
+                                @Nullable CoordinatorDfs dfs) {
         return cut.accept(INSTANCE, new Ctx(
                 src,
                 localFileLoader,
+                dfs,
                 cut.getLineMap(),
                 State.COMPILATION_UNIT,
                 null, 0, new ArrayList<>()));
@@ -37,21 +43,22 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
     protected record Ctx(String sourceCode,
                          LocalSrcFileLoader localFileLoader,
+                         @Nullable CoordinatorDfs dfs,
                          LineMap lineMap,
                          State state,
                          @Nullable CoordinatorSrc src,
                          int partitions,
                          List<Op> ops) {
         public Ctx transitionState() {
-            return new Ctx(sourceCode, localFileLoader, lineMap, state.next(), src, partitions, ops);
+            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state.next(), src, partitions, ops);
         }
 
         public Ctx withPartitions(int partitions) {
-            return new Ctx(sourceCode, localFileLoader, lineMap, state, src, partitions, ops);
+            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state, src, partitions, ops);
         }
 
         public Ctx withSrc(CoordinatorSrc src) {
-            return new Ctx(sourceCode, localFileLoader, lineMap, state, src, partitions, ops);
+            return new Ctx(sourceCode, localFileLoader, dfs, lineMap, state, src, partitions, ops);
         }
     }
 
@@ -174,7 +181,8 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                         ":"  + ctx.lineMap().getColumnNumber(node.getStartPosition())));
 
         int maxExpectedArgs = switch (kind) {
-            case LINES -> 1;
+            // TODO: declare args on the enum
+            case LINES, DFS -> 1;
             case CSV -> 2;
         };
 
@@ -202,6 +210,8 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
                 yield new CsvSrc(ctx.localFileLoader(), fileName, delimiter);
             }
+            // TODO: at some point, make dfs nonnull
+            case DFS -> new DfsSrc(Objects.requireNonNull(ctx.dfs(), "TODO: change this"), fileName);
         };
         return mst.getExpression().accept(this, ctx.withSrc(src).transitionState());
     }

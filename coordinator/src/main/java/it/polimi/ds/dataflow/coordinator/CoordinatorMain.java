@@ -1,54 +1,97 @@
 package it.polimi.ds.dataflow.coordinator;
 
+import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
+import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
-import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
-import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManagerImpl;
+import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
+import it.polimi.ds.map_reduce.js.Program;
+import it.polimi.ds.map_reduce.socket.packets.CreateFilePartitionPacket;
 import it.polimi.ds.map_reduce.src.LocalSrcFileLoader;
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.js.CompiledProgram;
-import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
+import it.polimi.ds.map_reduce.src.Src;
 import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
-import org.jetbrains.annotations.VisibleForTesting;
-import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
+import org.postgresql.ds.PGSimpleDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
-import java.util.Comparator;
-import java.util.Objects;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
+import java.util.concurrent.StructuredTaskScope;
 
 public final class CoordinatorMain {
 
-    private CoordinatorMain() {
+    private final LocalSrcFileLoader fileLoader;
+    private final Scanner in;
+    private final Parser parser;
+    private final ExecutorService threadPool;
+    private final CoordinatorDfs dfs;
+    private final WorkerManager workerManager;
+    private final Logger logger;
+
+    public CoordinatorMain(LocalSrcFileLoader fileLoader,
+                           Scanner in,
+                           Parser parser,
+                           ExecutorService threadPool,
+                           CoordinatorDfs dfs,
+                           WorkerManager workerManager,
+                           Logger logger) {
+        this.fileLoader = fileLoader;
+        this.in = in;
+        this.parser = parser;
+        this.threadPool = threadPool;
+        this.dfs = dfs;
+        this.workerManager = workerManager;
+        this.logger = logger;
     }
 
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
-    public static void main(String[] args) throws ScriptException, IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
 
         final LocalSrcFileLoader fileLoader = new LocalSrcFileLoader(Paths.get("./"));
         final Scanner in = new Scanner(System.in, System.console() != null ?
                 System.console().charset() :
                 StandardCharsets.UTF_8);
+        final Parser parser = Parser.create("--language=es6");
 
-        Parser parser = Parser.create("--language=es6");
-        ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
+        try (
+                ExecutorService threadPool = Executors.newVirtualThreadPerTaskExecutor();
+                CoordinatorDfs dfs = new PostgresCoordinatorDfs(config -> {
+                    PGSimpleDataSource ds = new PGSimpleDataSource();
+                    ds.setServerNames(new String[]{"localhost"});
+                    ds.setUser("postgres");
+                    ds.setPassword("password");
+                    ds.setDatabaseName("postgres");
+                    config.setDataSource(ds);
+                    return config;
+                });
+                WorkerManager workerManager = WorkerManager.listen(threadPool, 6666)
+        ) {
+            new CoordinatorMain(
+                    fileLoader,
+                    in,
+                    parser,
+                    threadPool,
+                    dfs,
+                    workerManager,
+                    LoggerFactory.getLogger(CoordinatorMain.class)
+            ).inputLoop();
+        }
+    }
 
+    private void inputLoop() throws IOException, InterruptedException {
         while (!Thread.interrupted()) {
-            System.out.println("Insert the program file path: ");
+            logger.info("Insert the program file path: ");
             String programFileName = in.nextLine();
 
             if (!fileLoader.exists(programFileName)) {
-                System.out.println("File not found");
+                logger.error("File not found");
                 continue;
             }
 
@@ -57,40 +100,55 @@ public final class CoordinatorMain {
                 src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
 
-            CompilationUnitTree cut = parser.parse(programFileName, src, System.err::println);
-            if (cut == null)
-                throw new UnsupportedOperationException("Failed to compile " + programFileName);
-            CompiledProgram program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader).compile(engine);
-
-            System.out.println(program.execute()
-                    .stream()
-                    .sorted(Comparator.<Tuple2>comparingInt(t -> Objects
-                            .requireNonNullElse((Number) t.value(), 0)
-                            .intValue()
-                    ).reversed())
-                    .limit(10)
-                    .collect(Collectors.toList()));
-
-
-            connectionTest();
-
-        }
-    }
-
-    @VisibleForTesting
-    static void connectionTest() throws IOException {
-        try (ServerSocket serverSocket = new ServerSocket(6666)) {
-
-            while (!Thread.interrupted()) {
-                final Socket socket = serverSocket.accept();
-                CoordinatorSocketManager mngr = new CoordinatorSocketManagerImpl(Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory()), socket);
-                var helloPckCtx = mngr.receive(HelloPacket.class);
-                System.out.println("Received hello packet");
-                helloPckCtx.ack();
-                System.out.println("Sent response hello packet");
-                System.out.println("OK");
+            try {
+                executeProgram(programFileName, src);
+            } catch (InterruptedException | InterruptedIOException ex) {
+                throw ex;
+            } catch (Throwable t) {
+                logger.error("Unrecoverable failure while executing job {}", programFileName, t);
             }
         }
     }
 
+    private void executeProgram(String programFileName, String src) throws Exception {
+
+        CompilationUnitTree cut = parser.parse(programFileName, src, info -> logger.error(info.getMessage()));
+        if (cut == null)
+            throw new UnsupportedOperationException(STR."Failed to compile \{programFileName}");
+        Program program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader, dfs);
+
+        if (program.src().isNonPartitioned())
+            program = program.withSrc(partitionFile(
+                    programFileName.endsWith(".js")
+                            ? programFileName.substring(0, programFileName.length() - ".js".length())
+                            : programFileName,
+                    program.partitions(),
+                    program.src()));
+
+        // TODO: execute program here on the distributed data
+    }
+
+    private Src partitionFile(String dfsName, int partitionsNum, Src src) throws Exception {
+        var dfsFile = dfs.createPartitionedFile(dfsName, partitionsNum);
+
+        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+            dfsFile.partitions().forEach(info -> {
+                var closeNodes = workerManager.getCloseToDfsNode(info.dfsNodeName());
+                if(closeNodes.isEmpty())
+                    throw new IllegalStateException("Failed to create partitioned file, " +
+                            STR."DFS node \{info.dfsNodeName()} has no connected workers");
+
+                var closestNode = closeNodes.getFirst();
+                scope.fork(() -> {
+                    closestNode.socket().send(new CreateFilePartitionPacket(info.fileName(), info.partition()));
+                    return null;
+                });
+            });
+
+            scope.join().throwIfFailed();
+        }
+
+        dfs.write(dfsFile, src.loadAll());
+        return new DfsSrc(dfs, dfsFile);
+    }
 }

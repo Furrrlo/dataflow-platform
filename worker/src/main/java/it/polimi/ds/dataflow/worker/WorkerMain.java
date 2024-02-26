@@ -10,15 +10,12 @@ import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
 import it.polimi.ds.map_reduce.socket.packets.JobResultPacket;
 import it.polimi.ds.map_reduce.socket.packets.ScheduleJobPacket;
 import it.polimi.ds.map_reduce.utils.ThreadPools;
-import it.polimi.ds.map_reduce.utils.database.DataManager;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 
-import javax.naming.ServiceUnavailableException;
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.net.Socket;
-import java.sql.Connection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -29,15 +26,6 @@ import java.util.concurrent.Future;
 public final class WorkerMain {
     private static final UUID uuid = UuidHandler.getUUID();
     private static final ExecutorService threadPool = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("worker-", 0).factory());
-    private final DataManager dataMngr;
-
-    private WorkerMain() throws ServiceUnavailableException {
-        dataMngr = new DataManager();
-    }
-
-    public WorkerMain(Connection dbConnection) {
-        this.dataMngr = new DataManager(dbConnection);
-    }
 
     @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP", "unused"})
     public static void main(String[] args) throws IOException {
