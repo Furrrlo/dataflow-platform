@@ -152,7 +152,7 @@ public class PostgresDfs implements Dfs {
 
     @Override
     public void write(DfsFile file, Tuple2 tuple) {
-        writeInPartition(file, tuple, file.partitionsNum());
+        writeInPartition(file, tuple, calculatePartition(tuple, file.partitionsNum()));
     }
 
     @Override
