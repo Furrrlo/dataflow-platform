@@ -1,8 +1,8 @@
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
-import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.js.CompiledProgram;
-import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.js.CompiledProgram;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;

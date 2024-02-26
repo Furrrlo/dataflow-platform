@@ -1,8 +1,8 @@
 package it.polimi.ds.dataflow.coordinator.dfs;
 
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.dfs.Dfs;
-import it.polimi.ds.map_reduce.dfs.DfsFile;
+import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.dfs.Dfs;
+import it.polimi.ds.dataflow.dfs.DfsFile;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.stream.Stream;

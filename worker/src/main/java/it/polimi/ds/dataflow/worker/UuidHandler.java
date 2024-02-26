@@ -1,6 +1,6 @@
 package it.polimi.ds.dataflow.worker;
 
-import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

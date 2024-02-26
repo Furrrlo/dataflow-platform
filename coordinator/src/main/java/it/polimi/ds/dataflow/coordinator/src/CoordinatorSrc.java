@@ -1,6 +1,6 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
-import it.polimi.ds.map_reduce.src.Src;
+import it.polimi.ds.dataflow.src.Src;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.List;

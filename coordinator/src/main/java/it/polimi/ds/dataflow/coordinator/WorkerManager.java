@@ -2,8 +2,8 @@ package it.polimi.ds.dataflow.coordinator;
 
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManagerImpl;
-import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
-import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.socket.packets.HelloPacket;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.Closeable;

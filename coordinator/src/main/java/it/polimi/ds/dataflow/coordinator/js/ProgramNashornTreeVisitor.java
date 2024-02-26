@@ -5,11 +5,11 @@ import it.polimi.ds.dataflow.coordinator.src.CoordinatorSrc;
 import it.polimi.ds.dataflow.coordinator.src.CsvSrc;
 import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
 import it.polimi.ds.dataflow.coordinator.src.LinesSrc;
-import it.polimi.ds.map_reduce.js.Op;
-import it.polimi.ds.map_reduce.js.OpKind;
-import it.polimi.ds.map_reduce.js.Program;
-import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
-import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.js.Op;
+import it.polimi.ds.dataflow.js.OpKind;
+import it.polimi.ds.dataflow.js.Program;
+import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.*;
 

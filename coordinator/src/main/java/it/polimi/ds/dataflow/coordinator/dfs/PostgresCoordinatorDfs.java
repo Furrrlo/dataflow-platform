@@ -1,11 +1,11 @@
 package it.polimi.ds.dataflow.coordinator.dfs;
 
 import com.zaxxer.hikari.HikariConfig;
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.dfs.DfsFile;
-import it.polimi.ds.map_reduce.dfs.DfsFilePartitionInfo;
-import it.polimi.ds.map_reduce.dfs.PostgresDfs;
-import it.polimi.ds.map_reduce.dfs.Tuple2JsonSerde;
+import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.dfs.DfsFile;
+import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
+import it.polimi.ds.dataflow.dfs.PostgresDfs;
+import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.ArrayList;

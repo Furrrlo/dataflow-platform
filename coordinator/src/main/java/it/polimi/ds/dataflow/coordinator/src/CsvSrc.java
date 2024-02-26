@@ -1,8 +1,8 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
-import it.polimi.ds.map_reduce.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 
 import java.util.stream.Stream;

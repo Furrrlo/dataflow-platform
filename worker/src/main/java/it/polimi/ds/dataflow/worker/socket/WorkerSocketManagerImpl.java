@@ -1,10 +1,10 @@
 package it.polimi.ds.dataflow.worker.socket;
 
-import it.polimi.ds.map_reduce.socket.SocketManagerImpl;
-import it.polimi.ds.map_reduce.socket.packets.C2SAckPacket;
-import it.polimi.ds.map_reduce.socket.packets.C2SPacket;
-import it.polimi.ds.map_reduce.socket.packets.S2CAckPacket;
-import it.polimi.ds.map_reduce.socket.packets.S2CPacket;
+import it.polimi.ds.dataflow.socket.SocketManagerImpl;
+import it.polimi.ds.dataflow.socket.packets.C2SAckPacket;
+import it.polimi.ds.dataflow.socket.packets.C2SPacket;
+import it.polimi.ds.dataflow.socket.packets.S2CAckPacket;
+import it.polimi.ds.dataflow.socket.packets.S2CPacket;
 
 import java.io.IOException;
 import java.net.Socket;

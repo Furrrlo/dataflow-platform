@@ -1,8 +1,8 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
 import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
-import it.polimi.ds.map_reduce.dfs.DfsFile;
-import it.polimi.ds.map_reduce.Tuple2;
+import it.polimi.ds.dataflow.dfs.DfsFile;
+import it.polimi.ds.dataflow.Tuple2;
 import org.jspecify.annotations.Nullable;
 
 import java.util.stream.Stream;

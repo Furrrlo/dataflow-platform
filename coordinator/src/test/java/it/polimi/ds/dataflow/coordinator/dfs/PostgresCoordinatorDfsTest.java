@@ -1,7 +1,7 @@
 package it.polimi.ds.dataflow.coordinator.dfs;
 
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.dfs.*;
+import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.dfs.*;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

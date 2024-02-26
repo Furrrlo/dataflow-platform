@@ -2,15 +2,15 @@ package it.polimi.ds.dataflow.worker;
 
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManager;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
-import it.polimi.ds.map_reduce.Tuple2;
-import it.polimi.ds.map_reduce.js.CompiledOp;
-import it.polimi.ds.map_reduce.js.CompiledProgram;
-import it.polimi.ds.map_reduce.js.Program;
-import it.polimi.ds.map_reduce.socket.packets.HelloPacket;
-import it.polimi.ds.map_reduce.socket.packets.JobResultPacket;
-import it.polimi.ds.map_reduce.socket.packets.ScheduleJobPacket;
-import it.polimi.ds.map_reduce.src.WorkDirFileLoader;
-import it.polimi.ds.map_reduce.utils.ThreadPools;
+import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.js.CompiledOp;
+import it.polimi.ds.dataflow.js.CompiledProgram;
+import it.polimi.ds.dataflow.js.Program;
+import it.polimi.ds.dataflow.socket.packets.HelloPacket;
+import it.polimi.ds.dataflow.socket.packets.JobResultPacket;
+import it.polimi.ds.dataflow.socket.packets.ScheduleJobPacket;
+import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.ThreadPools;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 
 import javax.script.ScriptEngine;
