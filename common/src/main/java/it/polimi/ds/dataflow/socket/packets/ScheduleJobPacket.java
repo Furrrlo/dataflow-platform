@@ -9,5 +9,5 @@ public record ScheduleJobPacket(
         List<Op> ops,
         String dfsSrcFileName, int partition,
         String dfsDstFileName
-) implements S2CPacket {
+) implements CoordinatorRequestPacket {
 }

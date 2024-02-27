@@ -38,8 +38,10 @@ public final class WorkerManager implements Closeable {
         try {
             while(!Thread.interrupted()) {
                 CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, socket.accept());
-                worker.receive(HelloPacket.class); // TODO: need to know to which dfs node its connected
-                workers.add(new Worker(worker, ""));
+                try(var ctx = worker.receive(HelloPacket.class)) {
+                    var helloPkt = ctx.getPacket();
+                    workers.add(new Worker(worker, helloPkt.uuid(), helloPkt.dfsNodeName()));
+                }
             }
         } catch (IOException e) {
             // TODO: all should die in a sea of flames

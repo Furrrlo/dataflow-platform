@@ -2,5 +2,5 @@ package it.polimi.ds.dataflow.socket.packets;
 
 import java.util.UUID;
 
-public record HelloPacket(UUID clientUUID) implements C2SPacket{
+public record HelloPacket(UUID uuid, String dfsNodeName) implements C2SPacket{
 }

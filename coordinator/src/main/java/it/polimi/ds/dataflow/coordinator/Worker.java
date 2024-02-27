@@ -4,22 +4,29 @@ import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
 import it.polimi.ds.dataflow.utils.ExceptionlessAutoCloseable;
 
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Worker {
 
     private final CoordinatorSocketManager socket;
+    private final UUID uuid;
     private final String dfsNodeName;
 
     private final AtomicInteger currentScheduledJobs = new AtomicInteger();
 
-    public Worker(CoordinatorSocketManager socket, String dfsNodeName) {
+    public Worker(CoordinatorSocketManager socket, UUID uuid, String dfsNodeName) {
         this.socket = socket;
+        this.uuid = uuid;
         this.dfsNodeName = dfsNodeName;
     }
 
     public CoordinatorSocketManager getSocket() {
         return socket;
+    }
+
+    public UUID getUuid() {
+        return uuid;
     }
 
     public String getDfsNodeName() {
