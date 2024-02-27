@@ -157,7 +157,7 @@ public final class CoordinatorMain {
                 currDfsFile.partitions().forEach(partition ->
                         workerManager.getCloseToDfsNode(partition.dfsNodeName())
                                 .stream()
-                                .min(Comparator.comparingInt(Worker::getCurrentScheduledJobs))
+                                .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                                 .ifPresent(worker -> {
                                     remainingPartitions.remove(partition);
                                     scheduleJobPartition(jobId, scope, worker, currOps, partition, dstDfsFile);
@@ -166,7 +166,7 @@ public final class CoordinatorMain {
                 remainingPartitions.forEach(partition -> {
                     var worker = workerManager.getWorkers()
                             .stream()
-                            .min(Comparator.comparingInt(Worker::getCurrentScheduledJobs))
+                            .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                             .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
                     scheduleJobPartition(jobId, scope, worker, currOps, partition, dstDfsFile);
                 });
@@ -199,7 +199,7 @@ public final class CoordinatorMain {
     @SuppressWarnings("resource")
     private void scheduleJobPartition(int jobId,
                                       JobStructuredTaskScope<@Nullable Object> scope,
-                                      Worker worker,
+                                      WorkerClient worker,
                                       List<Op> ops,
                                       DfsFilePartitionInfo partition,
                                       DfsFile resultingFile) {

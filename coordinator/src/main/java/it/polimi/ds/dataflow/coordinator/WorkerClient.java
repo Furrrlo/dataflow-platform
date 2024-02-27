@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class Worker {
+public final class WorkerClient {
 
     private final CoordinatorSocketManager socket;
     private final UUID uuid;
@@ -15,7 +15,7 @@ public final class Worker {
 
     private final AtomicInteger currentScheduledJobs = new AtomicInteger();
 
-    public Worker(CoordinatorSocketManager socket, UUID uuid, String dfsNodeName) {
+    public WorkerClient(CoordinatorSocketManager socket, UUID uuid, String dfsNodeName) {
         this.socket = socket;
         this.uuid = uuid;
         this.dfsNodeName = dfsNodeName;
@@ -46,7 +46,7 @@ public final class Worker {
     public boolean equals(Object obj) {
         if (obj == this) return true;
         if (obj == null || obj.getClass() != this.getClass()) return false;
-        var that = (Worker) obj;
+        var that = (WorkerClient) obj;
         return Objects.equals(this.socket, that.socket) &&
                 Objects.equals(this.dfsNodeName, that.dfsNodeName);
     }

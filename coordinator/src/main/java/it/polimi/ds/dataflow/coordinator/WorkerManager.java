@@ -21,7 +21,7 @@ public final class WorkerManager implements Closeable {
     private final ServerSocket socket;
     private final ExecutorService threadPool;
 
-    private final Set<Worker> workers = ConcurrentHashMap.newKeySet();
+    private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
 
     public static WorkerManager listen(ExecutorService threadPool, int port) throws IOException {
         WorkerManager mngr = new WorkerManager(threadPool, new ServerSocket(port));
@@ -40,7 +40,7 @@ public final class WorkerManager implements Closeable {
                 CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, socket.accept());
                 try(var ctx = worker.receive(HelloPacket.class)) {
                     var helloPkt = ctx.getPacket();
-                    workers.add(new Worker(worker, helloPkt.uuid(), helloPkt.dfsNodeName()));
+                    workers.add(new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName()));
                 }
             }
         } catch (IOException e) {
@@ -58,7 +58,7 @@ public final class WorkerManager implements Closeable {
             exs.add(ex);
         }
 
-        for (Worker w : workers) {
+        for (WorkerClient w : workers) {
             try {
                 w.getSocket().close();
             } catch (IOException ex) {
@@ -77,12 +77,12 @@ public final class WorkerManager implements Closeable {
         }
     }
 
-    public @Unmodifiable Set<Worker> getWorkers() {
+    public @Unmodifiable Set<WorkerClient> getWorkers() {
         return workers;
     }
 
     @SuppressFBWarnings({"IMPROPER_UNICODE"}) // Not security sensitive
-    public @Unmodifiable List<Worker> getCloseToDfsNode(String dfsNode) {
+    public @Unmodifiable List<WorkerClient> getCloseToDfsNode(String dfsNode) {
         // This is weird, but it's to avoid having spotbugs
         // report the issue on the lambda where I cannot suppress it
         Predicate<String> equalsIgnoreCase = dfsNode::equalsIgnoreCase;
