@@ -182,7 +182,7 @@ public final class CoordinatorMain {
         }
     }
 
-    private List<Op> nextOpsBatch(List<Op> remainingOps) {
+    private List<Op> nextOpsBatch(Iterable<Op> remainingOps) {
         var ops = new ArrayList<Op>();
 
         boolean wasShuffled = false;
