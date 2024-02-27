@@ -13,11 +13,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.script.ScriptEngine;
-import javax.script.ScriptException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Stream;
 
@@ -28,20 +28,23 @@ public class Worker implements Closeable {
     private final UUID uuid;
     private final String dfsNodeName;
     private final ScriptEngine engine;
-    private final ExecutorService threadPool;
+    private final ExecutorService ioThreadPool;
+    private final ExecutorService cpuThreadPool;
     private final Dfs dfs;
     private final WorkerSocketManager socket;
 
     public Worker(UUID uuid,
                   String dfsNodeName,
                   ScriptEngine engine,
-                  ExecutorService threadPool,
+                  ExecutorService ioThreadPool,
+                  ExecutorService cpuThreadPool,
                   Dfs dfs,
                   WorkerSocketManager socket) {
         this.uuid = uuid;
         this.dfsNodeName = dfsNodeName;
         this.engine = engine;
-        this.threadPool = threadPool;
+        this.ioThreadPool = ioThreadPool;
+        this.cpuThreadPool = cpuThreadPool;
         this.dfs = dfs;
         this.socket = socket;
     }
@@ -49,7 +52,7 @@ public class Worker implements Closeable {
     @Override
     @SuppressWarnings("EmptyTryBlock")
     public void close() throws IOException {
-        try(var _ = socket; var _ = dfs; var _ = threadPool) {
+        try(var _ = socket; var _ = dfs; var _ = ioThreadPool) {
             // I just want to close everything
         }
     }
@@ -59,7 +62,7 @@ public class Worker implements Closeable {
 
         while (!Thread.interrupted()) {
             var ctx0 = socket.receive(CoordinatorRequestPacket.class);
-            threadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
+            ioThreadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
                 try(var ctx = ctx0) {
                     ctx.reply(switch (ctx.getPacket()) {
                         case ScheduleJobPacket pkt -> onScheduleJob(pkt);
@@ -69,20 +72,24 @@ public class Worker implements Closeable {
                     // If it's an unrecoverable failure, the next socket.receive() call is gonna blow up anyway
                     // No need to make everything die here, we can just log and go on
                     LOGGER.error("Failed to send reply to coordinator", e);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
             }));
         }
     }
 
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
-    private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) {
+    private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
-            List<CompiledOp> compileOps = Program.compile(engine, pkt.ops());
-            // TODO: execute properly and write res to dfs
-            List<Tuple2> res = CompiledProgram.execute(compileOps, Stream.empty()).toList();
-            return new JobResultPacket(res);
-        } catch (ScriptException e) {
-            throw new RuntimeException(e); // TODO: handle errors
+            return cpuThreadPool.submit(() -> {
+                List<CompiledOp> compileOps = Program.compile(engine, pkt.ops());
+                // TODO: execute properly and write res to dfs
+                List<Tuple2> res = CompiledProgram.execute(compileOps, Stream.empty()).toList();
+                return new JobResultPacket(res);
+            }).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e); // TODO: return error
         }
     }
 

@@ -34,7 +34,10 @@ public final class WorkerMain {
                 dfsNodeName,
                 new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
                 Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
-                        .name("worker-", 0)
+                        .name("worker-io-", 0)
+                        .factory()),
+                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), Thread.ofPlatform()
+                        .name("worker-cpu-", 0)
                         .factory()),
                 new PostgresDfs(dfsCoordinatorName, config -> {
                     PGSimpleDataSource ds = new PGSimpleDataSource();
