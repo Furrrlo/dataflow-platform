@@ -212,11 +212,14 @@ public class PostgresDfs implements Dfs {
                 .from(isPartitionLocal(file, partition)
                         ? partitionTableFor(file, partition)
                         : coordinatorTableFor(file));
-        SelectLimitStep<Record2<Integer, JSONB>> limitStep = nextBatchPtr != null
+        SelectOrderByStep<Record2<Integer, JSONB>> orderByStep = nextBatchPtr != null
                 ? selectStep.where(KEY_HASH_COLUMN.gt(nextBatchPtr))
                 : selectStep;
 
-        final var data = limitStep.limit(batchHint).withTies().fetch();
+        final var data = orderByStep
+                .orderBy(KEY_HASH_COLUMN)
+                .limit(batchHint).withTies()
+                .fetch();
         final var ptr = data.getLast().get(KEY_HASH_COLUMN);
         return new BatchRead(
                 ptr,
