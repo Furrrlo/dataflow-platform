@@ -103,6 +103,7 @@ public class PostgresDfs implements Dfs {
         }
 
         return new DfsFile(name, Stream.concat(
+                        // Could use ctx.meta() instead, but it would use a less efficient query
                         ctx.select(PgTables.TABLENAME)
                                 .from(PgTables.PG_TABLES)
                                 .where(PgTables.SCHEMANAME.notEqual("pg_catalog")
