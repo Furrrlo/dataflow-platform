@@ -1,12 +1,10 @@
 package it.polimi.ds.dataflow.worker;
 
-import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.dfs.CreateFileOptions;
 import it.polimi.ds.dataflow.dfs.Dfs;
-import it.polimi.ds.dataflow.js.CompiledOp;
 import it.polimi.ds.dataflow.js.CompiledProgram;
 import it.polimi.ds.dataflow.js.Program;
 import it.polimi.ds.dataflow.socket.packets.*;
-import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import it.polimi.ds.dataflow.utils.ThreadPools;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManager;
 import org.slf4j.Logger;
@@ -15,11 +13,8 @@ import org.slf4j.LoggerFactory;
 import javax.script.ScriptEngine;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.stream.Stream;
 
 public class Worker implements Closeable {
 
@@ -79,17 +74,36 @@ public class Worker implements Closeable {
         }
     }
 
-    @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS")
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
-            return cpuThreadPool.submit(() -> {
-                List<CompiledOp> compileOps = Program.compile(engine, pkt.ops());
-                // TODO: execute properly and write res to dfs
-                List<Tuple2> res = CompiledProgram.execute(compileOps, Stream.empty()).toList();
-                return new JobResultPacket(res);
-            }).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e); // TODO: return error
+            var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName());
+
+            dfs.createFilePartition(pkt.dfsDstFileName(), pkt.partition(), CreateFileOptions.IF_NOT_EXISTS);
+            var dfsDstFile = dfs.findFile(pkt.dfsDstFileName());
+
+            var compileOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
+
+            Integer nextBatchPtr = null;
+            while(true) {
+                var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 100, nextBatchPtr);
+                if(currentBatch.data().isEmpty())
+                    break;
+
+                var currentBatchData = currentBatch.data();
+                var currentBatchRes = cpuThreadPool
+                        .submit(() -> CompiledProgram.execute(compileOps, currentBatchData.stream()).toList())
+                        .get();
+
+                dfs.writeBatchInPartition(dfsDstFile, pkt.partition(), currentBatchRes);
+                nextBatchPtr = currentBatch.nextBatchPtr();
+            }
+
+            return new JobSuccessPacket();
+
+        } catch (InterruptedException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            return new JobFailurePacket(ex);
         }
     }
 

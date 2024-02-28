@@ -151,7 +151,7 @@ public class Coordinator implements Closeable {
 
             try(var _ = unschedule;
                 var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
-
+                // TODO: switch on result type and do error recovery (?)
                 return new JobStructuredTaskScope.PartitionResult<>(partition.partition(), ctx.getPacket());
             }
         });
