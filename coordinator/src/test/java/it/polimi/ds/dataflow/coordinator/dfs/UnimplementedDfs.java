@@ -1,15 +1,18 @@
 package it.polimi.ds.dataflow.coordinator.dfs;
 
 import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.dfs.CreateFileOptions;
 import it.polimi.ds.dataflow.dfs.DfsFile;
 import org.jetbrains.annotations.Unmodifiable;
+import org.jspecify.annotations.Nullable;
 
+import java.util.Collection;
 import java.util.stream.Stream;
 
 public class UnimplementedDfs implements CoordinatorDfs {
 
     @Override
-    public void createFilePartition(String file, int partition) {
+    public void createFilePartition(String file, int partition, CreateFileOptions... options) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
@@ -29,12 +32,22 @@ public class UnimplementedDfs implements CoordinatorDfs {
     }
 
     @Override
-    public @Unmodifiable DfsFile createPartitionedFile(String name, int partitions) {
+    public void writeBatch(DfsFile file, Collection<Tuple2> tuple) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
-    public void write(DfsFile file, Stream<Tuple2> tuples) {
+    public void writeBatchInPartition(DfsFile file, int partition, Collection<Tuple2> tuple) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public BatchRead readNextBatch(DfsFile file, int partition, int batchHint, @Nullable Integer nextBatchPtr) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public @Unmodifiable DfsFile createPartitionedFile(String name, int partitions) {
         throw new UnsupportedOperationException("Not implemented");
     }
 

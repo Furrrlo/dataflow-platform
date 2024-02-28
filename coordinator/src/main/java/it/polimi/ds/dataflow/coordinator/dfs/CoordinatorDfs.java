@@ -11,7 +11,5 @@ public interface CoordinatorDfs extends Dfs {
 
     @Unmodifiable DfsFile createPartitionedFile(String name, int partitions);
 
-    void write(DfsFile file, Stream<Tuple2> tuples);
-
     Stream<Tuple2> loadAll(DfsFile file);
 }

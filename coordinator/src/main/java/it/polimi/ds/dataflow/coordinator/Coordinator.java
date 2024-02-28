@@ -186,7 +186,7 @@ public class Coordinator implements Closeable {
                     ex));
         }
 
-        dfs.write(dfsFile, src.loadAll());
+        dfs.writeBatch(dfsFile, src.loadAll().toList());
         return new DfsSrc(dfs, dfsFile);
     }
 }

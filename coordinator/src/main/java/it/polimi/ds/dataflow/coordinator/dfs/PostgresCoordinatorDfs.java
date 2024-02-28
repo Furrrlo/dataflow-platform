@@ -14,9 +14,7 @@ import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.jooq.JSONB.jsonb;
-import static org.jooq.impl.DSL.name;
-import static org.jooq.impl.DSL.table;
+import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.*;
 
 public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDfs {
 
@@ -39,21 +37,13 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     @Override
     @SuppressWarnings({"TrailingWhitespacesInTextBlock"})
     public DfsFile createPartitionedFile(String name, int partitions) {
-        ctx.execute(STR."""
-                \{
-                ctx.createTable(table(name(name)))
-                        .column(PARTITION_COLUMN)
-                        .column(DATA_COLUMN)
-                        .getSQL()
-                } PARTITION BY RANGE (partition)
-                """);
-
+        createCoordinatorTable(ctx, "", name, 0).execute();
         return new DfsFile(name, IntStream.range(0, partitions)
                 .mapToObj(partition -> {
                     String server = foreignServers.get(partition % foreignServers.size());
                     ctx.execute(STR."""
-                             CREATE FOREIGN TABLE \{ctx.render(table(name(STR."\{name}_\{partition}")))}
-                             PARTITION OF \{ctx.render(table(name(name)))}
+                             CREATE FOREIGN TABLE \{ctx.render(partitionTableFor(name, partition))}
+                             PARTITION OF \{ctx.render(coordinatorTableFor(name))}
                              FOR VALUES FROM (\{partition}) TO (\{partition + 1})
                              SERVER \{server}
                              """);
@@ -62,23 +52,11 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
                 .toList());
     }
 
-    @Override
-    public void write(DfsFile file, Stream<Tuple2> tuples) {
-        ctx.batch(tuples.map(t -> ctx
-                                .insertInto(table(file.name()))
-                                .columns(PARTITION_COLUMN, DATA_COLUMN)
-                                .values(
-                                        calculatePartition(t, file.partitionsNum()),
-                                        jsonb(serde.jsonify(t))
-                                ))
-                        .toList())
-                .execute();
-    }
 
     @Override
     public Stream<Tuple2> loadAll(DfsFile file) {
         return ctx.select(DATA_COLUMN)
-                .from(table(name(file.name())))
+                .from(coordinatorTableFor(file))
                 .stream()
                 .map(r -> serde.parseJson(r.get(DATA_COLUMN).data()));
     }
