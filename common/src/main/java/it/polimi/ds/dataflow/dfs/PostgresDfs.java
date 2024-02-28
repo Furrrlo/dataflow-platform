@@ -12,6 +12,8 @@ import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
 
+import javax.script.ScriptEngine;
+import javax.script.ScriptException;
 import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.IOException;
@@ -37,8 +39,8 @@ public class PostgresDfs implements Dfs {
 
     private final @Nullable String coordinatorName;
 
-    public PostgresDfs(String coordinatorName, Consumer<HikariConfig> configurator) {
-        this(coordinatorName, new JacksonTuple2Serde(), configurator);
+    public PostgresDfs(ScriptEngine engine, String coordinatorName, Consumer<HikariConfig> configurator) throws ScriptException {
+        this(coordinatorName, new JacksonTuple2Serde(engine), configurator);
     }
 
     public PostgresDfs(String coordinatorName,
@@ -47,8 +49,8 @@ public class PostgresDfs implements Dfs {
         this(coordinatorName, serde, configurator, null);
     }
 
-    protected PostgresDfs(Consumer<HikariConfig> configurator) {
-        this(new JacksonTuple2Serde(), configurator);
+    protected PostgresDfs(ScriptEngine engine, Consumer<HikariConfig> configurator) throws ScriptException {
+        this(new JacksonTuple2Serde(engine), configurator);
     }
 
     protected PostgresDfs(Tuple2JsonSerde serde,
@@ -85,6 +87,7 @@ public class PostgresDfs implements Dfs {
         if(failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
 
+        String coordinatorName = this.coordinatorName;
         boolean hasCoordinator = coordinatorName != null;
         if(hasCoordinator) {
             DfsFileTable

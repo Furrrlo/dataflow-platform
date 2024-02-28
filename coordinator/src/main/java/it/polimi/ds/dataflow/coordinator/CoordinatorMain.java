@@ -3,11 +3,13 @@ package it.polimi.ds.dataflow.coordinator;
 import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.Parser;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.script.ScriptException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
@@ -24,7 +26,8 @@ public final class CoordinatorMain {
     private CoordinatorMain() {
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException, ScriptException {
+
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
         final Scanner in = new Scanner(System.in, System.console() != null ?
                 System.console().charset() :
@@ -35,14 +38,16 @@ public final class CoordinatorMain {
                 fileLoader,
                 Parser.create("--language=es6"),
                 threadPool,
-                new PostgresCoordinatorDfs(config -> {
-                    PGSimpleDataSource ds = new PGSimpleDataSource();
-                    ds.setServerNames(new String[]{"localhost"});
-                    ds.setUser("postgres");
-                    ds.setPassword("password");
-                    ds.setDatabaseName("postgres");
-                    config.setDataSource(ds);
-                }),
+                new PostgresCoordinatorDfs(
+                        new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
+                        config -> {
+                            PGSimpleDataSource ds = new PGSimpleDataSource();
+                            ds.setServerNames(new String[]{"localhost"});
+                            ds.setUser("postgres");
+                            ds.setPassword("password");
+                            ds.setDatabaseName("postgres");
+                            config.setDataSource(ds);
+                        }),
                 WorkerManager.listen(threadPool, 6666))
         ) {
             inputLoop(fileLoader, in, coordinator, LoggerFactory.getLogger(CoordinatorMain.class));

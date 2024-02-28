@@ -6,6 +6,7 @@ plugins {
 dependencies {
     api(libs.nashorn)
     api(libs.slf4j)
+    implementation(libs.jackson)
 
     // DB stuff
     api(libs.hikaricp) // Connection pooling

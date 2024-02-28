@@ -4,9 +4,12 @@ import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
+import org.openjdk.nashorn.api.scripting.NashornScriptEngine;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.postgresql.ds.PGSimpleDataSource;
 
+import javax.script.ScriptEngine;
+import javax.script.ScriptException;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.file.Paths;
@@ -22,24 +25,25 @@ public final class WorkerMain {
     }
 
     @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP"})
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, ScriptException {
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
 
         final UUID uuid = UuidHandler.getUuid(fileLoader);
         final String dfsCoordinatorName = ""; // TODO: get the coordinator name here somehow
         final String dfsNodeName = ""; // TODO: get the dfs node name here somehow
 
+        ScriptEngine engine;
         try (Worker worker = new Worker(
                 uuid,
                 dfsNodeName,
-                new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
+                engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
                 Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
                         .name("worker-io-", 0)
                         .factory()),
                 Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), Thread.ofPlatform()
                         .name("worker-cpu-", 0)
                         .factory()),
-                new PostgresDfs(dfsCoordinatorName, config -> {
+                new PostgresDfs(engine, dfsCoordinatorName, config -> {
                     PGSimpleDataSource ds = new PGSimpleDataSource();
                     ds.setServerNames(new String[]{"localhost"});
                     ds.setUser("postgres");

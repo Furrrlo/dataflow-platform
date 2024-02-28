@@ -8,6 +8,8 @@ import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import org.jetbrains.annotations.VisibleForTesting;
 
+import javax.script.ScriptEngine;
+import javax.script.ScriptException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -25,8 +27,8 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
         super(serde, configurator);
     }
 
-    public PostgresCoordinatorDfs(Consumer<HikariConfig> configurator) {
-        super(configurator);
+    public PostgresCoordinatorDfs(ScriptEngine engine, Consumer<HikariConfig> configurator) throws ScriptException {
+        super(engine, configurator);
     }
 
     @VisibleForTesting
