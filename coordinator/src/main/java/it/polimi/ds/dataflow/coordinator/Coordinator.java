@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit;
 
 public class Coordinator implements Closeable {
 
+    private static final boolean RESHUFFLE_IN_WORKERS = false;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(Coordinator.class);
 
     private final WorkDirFileLoader fileLoader;
@@ -104,9 +106,13 @@ public class Coordinator implements Closeable {
             long startStepTime = System.nanoTime();
 
             int jobId = 0; // TODO
-            DfsFile dstDfsFile = dfs.createPartitionedFile(
-                    dfsFilesPrefix + "_step" + step,
-                    currDfsFile.partitionsNum());
+            DfsFile dstDfsFile = RESHUFFLE_IN_WORKERS
+                    // If workers need to do the reshuffling, we need to be sure all files exist before scheduling 'cause
+                    // otherwise one worker might need to write into the partition of another before he has created it
+                    ? partitionFile(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum())
+                    // if we do the reshuffling, we can assume each worker will create his partition when he needs to
+                    // write into it, and all partitions will be created when we get back to the coordinator to reshuffle
+                    : dfs.createPartitionedFile(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum());
 
             try (var scope = new JobStructuredTaskScope<@Nullable Object>(currDfsFile.partitionsNum())) {
                 var remainingPartitions = new HashSet<>(currDfsFile.partitions());
@@ -134,7 +140,7 @@ public class Coordinator implements Closeable {
                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startStepTime));
             }
 
-            if(currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
+            if(!RESHUFFLE_IN_WORKERS && currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
                 LOGGER.info("Reshuffling");
                 long startShuffleTime = System.nanoTime();
                 dfs.reshuffle(dstDfsFile);
@@ -176,8 +182,10 @@ public class Coordinator implements Closeable {
         scope.fork(() -> {
             var pkt = new ScheduleJobPacket(jobId,
                     ops,
+                    resultingFile.partitionsNum(),
                     partition.fileName(), partition.partition(),
-                    resultingFile.name());
+                    resultingFile.name(),
+                    RESHUFFLE_IN_WORKERS);
 
             try(var _ = unschedule;
                 var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
@@ -188,6 +196,14 @@ public class Coordinator implements Closeable {
     }
 
     private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws Exception {
+        var dfsFile = partitionFile(dfsName, partitionsNum);
+        try(var tuples = src.loadAll()) {
+            dfs.writeBatch(dfsFile, tuples.toList());
+        }
+        return new DfsSrc(dfs, dfsFile);
+    }
+
+    private DfsFile partitionFile(String dfsName, int partitionsNum) throws Exception {
         var dfsFile = dfs.createPartitionedFile(dfsName, partitionsNum);
 
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
@@ -216,9 +232,6 @@ public class Coordinator implements Closeable {
                     ex));
         }
 
-        try(var tuples = src.loadAll()) {
-            dfs.writeBatch(dfsFile, tuples.toList());
-        }
-        return new DfsSrc(dfs, dfsFile);
+        return dfsFile;
     }
 }

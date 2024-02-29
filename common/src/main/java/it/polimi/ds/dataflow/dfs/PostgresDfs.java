@@ -153,6 +153,12 @@ public class PostgresDfs implements Dfs {
     }
 
     @Override
+    public DfsFile findFile(String name, int partitions) {
+        var file = findFile(name);
+        return new DfsFile(file.name(), partitions, file.partitions());
+    }
+
+    @Override
     public void write(DfsFile file, Tuple2 tuple) {
         writeInPartition(file, tuple, calculatePartition(tuple, file.partitionsNum()));
     }

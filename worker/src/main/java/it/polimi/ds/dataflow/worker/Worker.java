@@ -77,10 +77,10 @@ public class Worker implements Closeable {
 
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
-            var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName());
+            var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions());
 
             dfs.createFilePartition(pkt.dfsDstFileName(), pkt.partition(), CreateFileOptions.IF_NOT_EXISTS);
-            var dfsDstFile = dfs.findFile(pkt.dfsDstFileName());
+            var dfsDstFile = dfs.findFile(pkt.dfsDstFileName(), pkt.partitions());
 
             var compileOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
 
@@ -95,7 +95,10 @@ public class Worker implements Closeable {
                         .submit(() -> CompiledProgram.execute(compileOps, currentBatchData.stream()).toList())
                         .get();
 
-                dfs.writeBatchInPartition(dfsDstFile, pkt.partition(), currentBatchRes);
+                if(pkt.reshuffle())
+                    dfs.writeBatch(dfsDstFile, currentBatchRes);
+                else
+                    dfs.writeBatchInPartition(dfsDstFile, pkt.partition(), currentBatchRes);
                 nextBatchPtr = currentBatch.nextBatchPtr();
             }
 
