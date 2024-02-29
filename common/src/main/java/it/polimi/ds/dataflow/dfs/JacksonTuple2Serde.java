@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.POJONode;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import it.polimi.ds.dataflow.Tuple2;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.scripting.JSObject;
 import org.openjdk.nashorn.api.scripting.ScriptObjectMirror;
@@ -26,7 +27,14 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-@SuppressWarnings("serial")
+@SuppressWarnings({
+        "serial", // Don't care about this being serializable
+        "RedundantSuppression" // Javac complains about serial, IntelliJ about the suppression
+})
+@SuppressFBWarnings({
+        "SE_BAD_FIELD", // Don't care about this being serializable
+        "EXS_EXCEPTION_SOFTENING_NO_CHECKED" // Done on purpose thank you
+})
 public class JacksonTuple2Serde implements Tuple2JsonSerde {
 
     private final ObjectMapper mapper;
@@ -248,8 +256,9 @@ public class JacksonTuple2Serde implements Tuple2JsonSerde {
                 case BINARY -> node.binaryValue();
                 case ARRAY -> {
                     var list = new ArrayList<>();
-                    for (Iterator<JsonNode> it = node.elements(); it.hasNext(); )
+                    for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
                         list.add(readTreeAsAny(ctxt, javaListToJsArrFn, it.next()));
+                    }
                     yield javaListToJsArrFn.apply(list);
                 }
                 case OBJECT -> ctxt.readTreeAsValue(node, ScriptObjectMirror.class);

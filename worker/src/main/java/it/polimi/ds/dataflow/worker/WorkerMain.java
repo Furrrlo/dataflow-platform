@@ -23,6 +23,7 @@ public final class WorkerMain {
     private WorkerMain() {
     }
 
+    @SuppressFBWarnings("HES_LOCAL_EXECUTOR_SERVICE")
     @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP"})
     public static void main(String[] args) throws IOException, ScriptException {
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));

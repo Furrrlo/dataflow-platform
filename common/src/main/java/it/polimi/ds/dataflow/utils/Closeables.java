@@ -9,7 +9,10 @@ import java.util.Collection;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-@SuppressWarnings("unused")
+@SuppressWarnings({
+        "unused",
+        "PMD.SignatureDeclareThrowsException" // AutoCloseables throw Exceptions
+})
 public final class Closeables {
 
     private Closeables() {
