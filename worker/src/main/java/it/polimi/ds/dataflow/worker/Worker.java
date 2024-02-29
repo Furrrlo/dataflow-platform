@@ -86,7 +86,7 @@ public class Worker implements Closeable {
 
             Integer nextBatchPtr = null;
             while(true) {
-                var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 100, nextBatchPtr);
+                var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
                 if(currentBatch.data().isEmpty())
                     break;
 

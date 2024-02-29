@@ -1,5 +1,6 @@
 package it.polimi.ds.dataflow.coordinator.dfs;
 
+import com.google.errorprone.annotations.MustBeClosed;
 import com.zaxxer.hikari.HikariConfig;
 import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.dfs.DfsFile;
@@ -57,7 +58,7 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
 
 
     @Override
-    public Stream<Tuple2> loadAll(DfsFile file) {
+    public @MustBeClosed Stream<Tuple2> loadAll(DfsFile file) {
         return ctx.select(DATA_COLUMN)
                 .from(coordinatorTableFor(file))
                 .stream()

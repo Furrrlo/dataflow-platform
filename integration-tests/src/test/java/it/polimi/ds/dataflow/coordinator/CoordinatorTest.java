@@ -226,13 +226,17 @@ class CoordinatorTest {
 
         final String name = "wordCountTest";
         var resDfsFile = COORDINATOR.compileAndExecuteProgram(name, src);
-        List<Tuple2> res = COORDINATOR_DFS.loadAll(resDfsFile)
+
+        List<Tuple2> res;
+        try(var stream = COORDINATOR_DFS.loadAll(resDfsFile)
                 .sorted(Comparator.<Tuple2>comparingInt(t -> Objects
                         .requireNonNullElse((Number) t.value(), 0)
                         .intValue()
                 ).reversed())
-                .limit(10)
-                .toList();
+                .limit(10)) {
+            res = stream.toList();
+        }
+
         assertEquals(
                 List.of(new Tuple2("the", 906.0),
                         new Tuple2("and", 723.0),

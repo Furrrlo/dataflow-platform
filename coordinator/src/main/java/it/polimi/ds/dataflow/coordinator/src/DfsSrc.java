@@ -1,5 +1,6 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
+import com.google.errorprone.annotations.MustBeClosed;
 import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
 import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.Tuple2;
@@ -31,7 +32,7 @@ public final class DfsSrc implements CoordinatorSrc {
     }
 
     @Override
-    public Stream<Tuple2> loadAll() {
+    public @MustBeClosed Stream<Tuple2> loadAll() {
         return dfs.loadAll(getDfsFile());
     }
 }

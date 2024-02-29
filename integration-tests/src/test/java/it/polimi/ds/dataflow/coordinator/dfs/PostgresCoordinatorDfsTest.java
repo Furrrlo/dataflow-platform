@@ -191,9 +191,11 @@ class PostgresCoordinatorDfsTest {
         }
 
         var tupleComparator = Comparator.<Tuple2, String>comparing(t -> (String) t.key());
-        assertEquals(
-                tuplesToRead.stream().sorted(tupleComparator).toList(),
-                COORDINATOR_DFS.loadAll(coordinatorPartitionedFile).sorted(tupleComparator).toList());
+        try(var res = COORDINATOR_DFS.loadAll(coordinatorPartitionedFile)) {
+            assertEquals(
+                    tuplesToRead.stream().sorted(tupleComparator).toList(),
+                    res.sorted(tupleComparator).toList());
+        }
 
         // Try to write from one which does not own the partition
         for (DfsFilePartitionInfo partition : coordinatorPartitionedFile.partitions()) {
@@ -217,8 +219,10 @@ class PostgresCoordinatorDfsTest {
             });
         }
 
-        assertEquals(
-                tuplesToRead.stream().sorted(tupleComparator).toList(),
-                COORDINATOR_DFS.loadAll(coordinatorPartitionedFile).sorted(tupleComparator).toList());
+        try(var res = COORDINATOR_DFS.loadAll(coordinatorPartitionedFile)) {
+            assertEquals(
+                    tuplesToRead.stream().sorted(tupleComparator).toList(),
+                    res.sorted(tupleComparator).toList());
+        }
     }
 }
