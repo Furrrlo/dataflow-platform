@@ -56,15 +56,15 @@ public class Coordinator implements Closeable {
         }
     }
 
-    public void compileAndExecuteProgram(String programFileName, String src) throws Exception {
+    public DfsFile compileAndExecuteProgram(String programFileName, String src) throws Exception {
         CompilationUnitTree cut = parser.parse(programFileName, src, info -> LOGGER.error(info.getMessage()));
         if (cut == null)
             throw new UnsupportedOperationException(STR."Failed to compile \{programFileName}");
 
-        executeProgram(programFileName, ProgramNashornTreeVisitor.parse(src, cut, fileLoader, dfs));
+        return executeProgram(programFileName, ProgramNashornTreeVisitor.parse(src, cut, fileLoader, dfs));
     }
 
-    public void executeProgram(String programFileName, Program program) throws Exception {
+    public DfsFile executeProgram(String programFileName, Program program) throws Exception {
 
         if (program.src() instanceof NonPartitionedCoordinatorSrc nonPartitionedSrc)
             program = program.withSrc(partitionFile(
@@ -119,6 +119,8 @@ public class Coordinator implements Closeable {
 
             currDfsFile = dstDfsFile;
         }
+
+        return currDfsFile;
     }
 
     private List<Op> nextOpsBatch(Iterable<Op> remainingOps) {
