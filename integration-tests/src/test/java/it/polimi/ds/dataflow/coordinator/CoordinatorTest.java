@@ -4,6 +4,7 @@ import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
 import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.Closeables;
 import it.polimi.ds.dataflow.worker.Worker;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
 import org.junit.jupiter.api.AfterAll;
@@ -35,6 +36,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.coordinator.PostgresWorker.createDataSourceFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -187,40 +189,19 @@ class CoordinatorTest {
     }
 
     @AfterAll
-    @SuppressWarnings("unused")
-    static void tearDown() throws IOException {
-        var exs = new ArrayList<Throwable>();
-        WORKERS.forEach(w -> {
-            try {
-                w.close();
-            } catch (Throwable t) {
-                exs.add(t);
-            }
-        });
-
-        POSTGRES_WORKERS.forEach(w -> {
-            try {
-                w.container().close();
-            } catch (Throwable t) {
-                exs.add(t);
-            }
-        });
-
-        try(var _ = NETWORK; var _ = COORDINATOR_NODE; var _ = COORDINATOR) {
-            try {
-                // shutdownNow also interrupts running threads, which is needed to shut down network stuff
-                CPU_THREAD_POOL.shutdownNow();
-                IO_THREAD_POOL.shutdownNow();
-            } catch (Throwable t) {
-                exs.add(t);
-            }
-
-            if(exs.isEmpty())
-                return;
-
-            IOException ex = new IOException();
-            exs.forEach(ex::addSuppressed);
-            throw ex;
+    @SuppressWarnings("EmptyTryBlock")
+    static void tearDown() throws Exception {
+        try(var _ = Closeables.Auto.compose(Stream.concat(Stream.concat(
+                                WORKERS.stream(),
+                                POSTGRES_WORKERS.stream().map(PostgresWorker::container)),
+                        Stream.of(COORDINATOR, COORDINATOR_NODE, NETWORK)),
+                e -> new Exception("Failed to tearDown", e)
+        )) {
+            // I just want to close all the stuff
+        } finally {
+            // shutdownNow also interrupts running threads, which is needed to shut down network stuff
+            CPU_THREAD_POOL.shutdownNow();
+            IO_THREAD_POOL.shutdownNow();
         }
     }
 

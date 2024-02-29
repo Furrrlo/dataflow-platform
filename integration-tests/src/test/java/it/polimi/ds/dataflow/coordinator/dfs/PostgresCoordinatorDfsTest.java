@@ -6,6 +6,7 @@ import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
+import it.polimi.ds.dataflow.utils.Closeables;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -138,25 +138,11 @@ class PostgresCoordinatorDfsTest {
     }
 
     @AfterAll
-    @SuppressWarnings("unused")
-    static void tearDown() throws IOException {
-        var exs = new ArrayList<Throwable>();
-        WORKERS.forEach(w -> {
-            try {
-                w.getContainer().close();
-            } catch (Throwable t) {
-                exs.add(t);
-            }
-        });
-
-        try(var coordinator = COORDINATOR_NODE; var network = NETWORK) {
-            if(exs.isEmpty())
-                return;
-
-            IOException ex = new IOException();
-            exs.forEach(ex::addSuppressed);
-            throw ex;
-        }
+    static void tearDown() throws Exception {
+        Closeables.Auto.closeAll(Stream.concat(
+                WORKERS.stream().map(PostgresWorker::container),
+                Stream.of(COORDINATOR_NODE, NETWORK)),
+                e -> new Exception("Failed to tear down stuff", e));
     }
 
     @Test
