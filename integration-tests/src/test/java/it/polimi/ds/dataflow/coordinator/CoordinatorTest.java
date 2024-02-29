@@ -34,7 +34,9 @@ import java.sql.Statement;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -167,15 +169,24 @@ class CoordinatorTest {
 
         WORKERS = new ArrayList<>();
         for(PostgresWorker pgWorker : POSTGRES_WORKERS) {
+            final var loopTaskRef = new AtomicReference<Future<?>>();
             var worker = new Worker(
                     UUID.randomUUID(),
                     pgWorker.postgresNodeName(),
                     engineFactory.get(),
                     IO_THREAD_POOL, CPU_THREAD_POOL,
                     pgWorker.dfs(),
-                    new WorkerSocketManagerImpl(new Socket("localhost", port)));
+                    new WorkerSocketManagerImpl(new Socket("localhost", port))) {
+                @Override
+                public void close() throws IOException {
+                    var loopTask = loopTaskRef.get();
+                    if(loopTask != null)
+                        loopTask.cancel(true);
+                    super.close();
+                }
+            };
             WORKERS.add(worker);
-            IO_THREAD_POOL.execute(() -> {
+            loopTaskRef.set(IO_THREAD_POOL.submit(() -> {
                 try {
                     worker.loop();
                 } catch (InterruptedIOException e) {
@@ -183,7 +194,7 @@ class CoordinatorTest {
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
-            });
+            }));
         }
         WORKERS = List.copyOf(WORKERS);
     }
