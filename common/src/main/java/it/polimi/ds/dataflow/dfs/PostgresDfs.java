@@ -235,7 +235,7 @@ public class PostgresDfs implements Dfs {
     }
 
     protected int calculatePartition(Tuple2 tuple, int partitions) {
-        return hash(tuple) % partitions;
+        return (int) (Integer.toUnsignedLong(hash(tuple)) % partitions);
     }
 
     protected boolean isPartitionLocal(DfsFile file, int partition) {
