@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.TimeUnit;
 
 public class Coordinator implements Closeable {
 
@@ -57,16 +58,25 @@ public class Coordinator implements Closeable {
     }
 
     public DfsFile compileAndExecuteProgram(String programFileName, String src) throws Exception {
+        LOGGER.info("Compiling program {}...", programFileName);
+        long startNanos = System.nanoTime();
+
         CompilationUnitTree cut = parser.parse(programFileName, src, info -> LOGGER.error(info.getMessage()));
         if (cut == null)
             throw new UnsupportedOperationException(STR."Failed to compile \{programFileName}");
 
+        LOGGER.info("Compiled program {} in {} millis",
+                programFileName,
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
         return executeProgram(programFileName, ProgramNashornTreeVisitor.parse(src, cut, fileLoader, dfs));
     }
 
     public DfsFile executeProgram(String programFileName, Program program) throws Exception {
 
-        if (program.src() instanceof NonPartitionedCoordinatorSrc nonPartitionedSrc)
+        if (program.src() instanceof NonPartitionedCoordinatorSrc nonPartitionedSrc) {
+            LOGGER.info("Partitioning program {} source...", programFileName);
+            long startNanos = System.nanoTime();
+
             program = program.withSrc(partitionFile(
                     programFileName.endsWith(".js")
                             ? programFileName.substring(0, programFileName.length() - ".js".length())
@@ -74,8 +84,16 @@ public class Coordinator implements Closeable {
                     nonPartitionedSrc.requestedPartitions(),
                     program.src()));
 
+            LOGGER.info("Partitioned program {} in {} millis",
+                    programFileName,
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
+        }
+
         if(!(program.src() instanceof DfsSrc dfsSrc))
             throw new IllegalStateException("Only DfsSrc can be scheduled, but there's still " + program.src());
+
+        LOGGER.info("Executing program {}...", programFileName);
+        long startNanos = System.nanoTime();
 
         final var dfsFilesPrefix = dfsSrc.getDfsFile().name() + "_" + System.currentTimeMillis();
 
@@ -84,6 +102,9 @@ public class Coordinator implements Closeable {
         for(int step = 0; !remainingOps.isEmpty(); step++) {
             var currOps = nextOpsBatch(remainingOps);
             currOps.forEach(_ -> remainingOps.removeFirst());
+
+            LOGGER.info("Executing step {}...", step);
+            long startStepTime = System.nanoTime();
 
             int jobId = 0; // TODO
             DfsFile dstDfsFile = dfs.createPartitionedFile(
@@ -111,6 +132,9 @@ public class Coordinator implements Closeable {
                 });
 
                 scope.join().result(IOException::new);
+                LOGGER.info("Executed step {} in {}",
+                        step,
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startStepTime));
             }
 
 //            if(currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
@@ -120,6 +144,9 @@ public class Coordinator implements Closeable {
             currDfsFile = dstDfsFile;
         }
 
+        LOGGER.info("Executed program {} in {} millis",
+                programFileName,
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
         return currDfsFile;
     }
 
