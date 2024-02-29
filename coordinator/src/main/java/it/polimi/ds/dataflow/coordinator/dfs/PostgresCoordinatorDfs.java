@@ -19,6 +19,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.*;
+import static org.jooq.impl.DSL.name;
 
 public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDfs {
 
@@ -75,14 +76,15 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
                 .cast(SQLDataType.INTEGER);
         // Cannot use an UPDATE statement which changes the partition key directly,
         // so remove and add back in a transaction
-        ctx.transaction(tx -> tx.dsl().begin(
-                tx.dsl().insertInto(table, PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                        .select(tx.dsl()
-                                .select(newPartitionSql, KEY_HASH_COLUMN, DATA_COLUMN)
-                                .from(table)
-                                .where(PARTITION_COLUMN.notEqual(newPartitionSql))),
-                tx.dsl().deleteFrom(table)
-                        .where(PARTITION_COLUMN.notEqual(newPartitionSql))
-        ).execute());
+        ctx.transaction(tx -> {
+            var withTable = name("shuffled")
+                    .as(tx.dsl().deleteFrom(table)
+                            .where(PARTITION_COLUMN.notEqual(newPartitionSql))
+                            .returningResult(newPartitionSql.as("partition"), KEY_HASH_COLUMN, DATA_COLUMN));
+            tx.dsl().with(withTable)
+                    .insertInto(table, PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
+                    .select(tx.dsl().selectFrom(withTable))
+                    .execute();
+        });
     }
 }
