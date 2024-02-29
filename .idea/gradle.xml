@@ -23,6 +23,7 @@
             <option value="$PROJECT_DIR$/build-logic" />
             <option value="$PROJECT_DIR$/common" />
             <option value="$PROJECT_DIR$/coordinator" />
+            <option value="$PROJECT_DIR$/integration-tests" />
             <option value="$PROJECT_DIR$/worker" />
           </set>
         </option>

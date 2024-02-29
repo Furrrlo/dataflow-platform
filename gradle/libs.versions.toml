@@ -1,4 +1,6 @@
 [versions]
+slf4j = "2.0.12"
+
 junit = "5.9.1"
 testcontainers = "1.19.6"
 
@@ -14,7 +16,8 @@ hikaricp = "com.zaxxer:HikariCP:5.1.0"
 jackson = "com.fasterxml.jackson.core:jackson-databind:2.16.1"
 
 # Logging stuff
-slf4j = "org.slf4j:slf4j-api:2.0.12"
+slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref="slf4j" }
+slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref="slf4j" }
 
 # Annotations libraries, these do not add any actual functionality, only allow for additional compiler checks
 annotations-jspecify = "org.jspecify:jspecify:0.3.0" # Nullability annotations

@@ -31,8 +31,8 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
         super(engine, configurator);
     }
 
-    @VisibleForTesting
-    void addForeignServer(String foreignServer) {
+    @VisibleForTesting // TODO: make this not public, but package private
+    public void addForeignServer(String foreignServer) {
         foreignServers.add(foreignServer);
     }
 

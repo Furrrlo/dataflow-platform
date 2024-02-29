@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     api(libs.nashorn)
-    api(libs.slf4j)
+    api(libs.slf4j.api)
     implementation(libs.jackson)
 
     // DB stuff
