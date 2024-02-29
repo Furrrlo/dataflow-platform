@@ -7,6 +7,7 @@ import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import org.jetbrains.annotations.VisibleForTesting;
+import org.jooq.impl.SQLDataType;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
@@ -61,5 +62,26 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
                 .from(coordinatorTableFor(file))
                 .stream()
                 .map(r -> serde.parseJson(r.get(DATA_COLUMN).data()));
+    }
+
+    @Override
+    public void reshuffle(DfsFile file) {
+        var table = coordinatorTableFor(file);
+        var newPartitionSql = KEY_HASH_COLUMN
+                .cast(SQLDataType.BIGINT)
+                .bitAnd(0xffffffffL)
+                .mod(file.partitionsNum())
+                .cast(SQLDataType.INTEGER);
+        // Cannot use an UPDATE statement which changes the partition key directly,
+        // so remove and add back in a transaction
+        ctx.transaction(tx -> tx.dsl().begin(
+                tx.dsl().insertInto(table, PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
+                        .select(tx.dsl()
+                                .select(newPartitionSql, KEY_HASH_COLUMN, DATA_COLUMN)
+                                .from(table)
+                                .where(PARTITION_COLUMN.notEqual(newPartitionSql))),
+                tx.dsl().deleteFrom(table)
+                        .where(PARTITION_COLUMN.notEqual(newPartitionSql))
+        ).execute());
     }
 }

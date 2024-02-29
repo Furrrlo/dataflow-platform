@@ -57,6 +57,11 @@ public class UnimplementedDfs implements CoordinatorDfs {
     }
 
     @Override
+    public void reshuffle(DfsFile file) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
     public void close() {
         throw new UnsupportedOperationException("Not implemented");
     }

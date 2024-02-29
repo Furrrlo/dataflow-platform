@@ -137,9 +137,12 @@ public class Coordinator implements Closeable {
                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startStepTime));
             }
 
-//            if(currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
-//                // TODO: shuffle
-//            }
+            if(currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
+                LOGGER.info("Reshuffling");
+                long startShuffleTime = System.nanoTime();
+                dfs.reshuffle(dstDfsFile);
+                LOGGER.info("Shuffled in {} millis", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startShuffleTime));
+            }
 
             currDfsFile = dstDfsFile;
         }
