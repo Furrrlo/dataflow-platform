@@ -237,7 +237,7 @@ public class PostgresDfs implements Dfs {
                 .orderBy(KEY_HASH_COLUMN)
                 .limit(batchHint).withTies()
                 .fetch();
-        final var ptr = data.getLast().get(KEY_HASH_COLUMN);
+        final var ptr = !data.isEmpty() ? data.getLast().get(KEY_HASH_COLUMN) : null;
         return new BatchRead(
                 ptr,
                 data.map(r -> serde.parseJson(r.get(DATA_COLUMN).data())));

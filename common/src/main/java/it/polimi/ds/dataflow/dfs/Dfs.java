@@ -25,6 +25,6 @@ public interface Dfs extends Closeable {
 
     BatchRead readNextBatch(DfsFile file, int partition, int batchHint, @Nullable Integer nextBatchPtr);
 
-    record BatchRead(int nextBatchPtr, @Unmodifiable Collection<Tuple2> data) {
+    record BatchRead(@Nullable Integer nextBatchPtr, @Unmodifiable Collection<Tuple2> data) {
     }
 }
