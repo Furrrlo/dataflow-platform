@@ -108,7 +108,7 @@ public class PostgresDfs implements Dfs {
     }
 
     @Override
-    public DfsFile findFile(String name) {
+    public DfsFile findFile(String name, int partitions) {
         record TmpTableData(String tablename, String srvname, boolean isLocal) {
         }
 
@@ -150,12 +150,6 @@ public class PostgresDfs implements Dfs {
                     return new DfsFilePartitionInfo(name, partition, r.srvname, r.isLocal);
                 })
                 .toList());
-    }
-
-    @Override
-    public DfsFile findFile(String name, int partitions) {
-        var file = findFile(name);
-        return new DfsFile(file.name(), partitions, file.partitions());
     }
 
     @Override

@@ -57,6 +57,16 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
                 .toList());
     }
 
+    @Override
+    public DfsFile findFile(String name) {
+        var file = super.findFile(name, 0);
+        return new DfsFile(file.name(), file.partitions());
+    }
+
+    @Override
+    public DfsFile findFile(String name, int partitions) {
+        return findFile(name);
+    }
 
     @Override
     public @MustBeClosed Stream<Tuple2> loadAll(DfsFile file) {

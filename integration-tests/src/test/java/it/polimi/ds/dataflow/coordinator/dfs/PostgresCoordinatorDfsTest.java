@@ -177,7 +177,7 @@ class PostgresCoordinatorDfsTest {
                     .orElseThrow(() -> new IllegalStateException(STR."Missing node for partition \{partition}"));
             worker.getDfs().createFilePartition(partition.fileName(), partition.partition());
 
-            var workerFile = worker.getDfs().findFile(partition.fileName());
+            var workerFile = worker.getDfs().findFile(partition.fileName(), coordinatorPartitionedFile.partitionsNum());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +
@@ -206,7 +206,7 @@ class PostgresCoordinatorDfsTest {
             if(worker == null)
                 continue;
 
-            var workerFile = worker.getDfs().findFile(partition.fileName());
+            var workerFile = worker.getDfs().findFile(partition.fileName(), coordinatorPartitionedFile.partitionsNum());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +
