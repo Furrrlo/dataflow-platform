@@ -161,7 +161,6 @@ class CoordinatorTest {
         COORDINATOR = new Coordinator(
                 FILE_LOADER,
                 Parser.create("--language=es6"),
-                IO_THREAD_POOL,
                 COORDINATOR_DFS,
                 WorkerManager.listen(IO_THREAD_POOL, port));
 

@@ -47,7 +47,8 @@ public class Worker implements Closeable {
     @Override
     @SuppressWarnings("EmptyTryBlock")
     public void close() throws IOException {
-        try(var _ = socket; var _ = dfs; var _ = ioThreadPool) {
+        try(var _ = dfs;
+            var _ = socket) {
             // I just want to close everything
         }
     }

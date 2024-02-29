@@ -33,11 +33,10 @@ public final class CoordinatorMain {
                 System.console().charset() :
                 StandardCharsets.UTF_8);
 
-        try (var threadPool = Executors.newVirtualThreadPerTaskExecutor();
-             var coordinator = new Coordinator(
+        var threadPool = Executors.newVirtualThreadPerTaskExecutor();
+        try (var coordinator = new Coordinator(
                 fileLoader,
                 Parser.create("--language=es6"),
-                threadPool,
                 new PostgresCoordinatorDfs(
                         new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
                         config -> {
@@ -51,6 +50,9 @@ public final class CoordinatorMain {
                 WorkerManager.listen(threadPool, 6666))
         ) {
             inputLoop(fileLoader, in, coordinator, LoggerFactory.getLogger(CoordinatorMain.class));
+        } finally {
+            // shutdownNow also interrupts running threads, which is needed to shut down network stuff
+            threadPool.shutdownNow();
         }
     }
 

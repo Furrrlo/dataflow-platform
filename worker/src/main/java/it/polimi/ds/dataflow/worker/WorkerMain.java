@@ -4,7 +4,6 @@ import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
-import org.openjdk.nashorn.api.scripting.NashornScriptEngine;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.postgresql.ds.PGSimpleDataSource;
 
@@ -33,16 +32,18 @@ public final class WorkerMain {
         final String dfsNodeName = ""; // TODO: get the dfs node name here somehow
 
         ScriptEngine engine;
+        var ioThreadPool = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
+                .name("worker-io-", 0)
+                .factory());
+        var cpuThreadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), Thread.ofPlatform()
+                .name("worker-cpu-", 0)
+                .factory());
         try (Worker worker = new Worker(
                 uuid,
                 dfsNodeName,
                 engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
-                Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
-                        .name("worker-io-", 0)
-                        .factory()),
-                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), Thread.ofPlatform()
-                        .name("worker-cpu-", 0)
-                        .factory()),
+                ioThreadPool,
+                cpuThreadPool,
                 new PostgresDfs(engine, dfsCoordinatorName, config -> {
                     PGSimpleDataSource ds = new PGSimpleDataSource();
                     ds.setServerNames(new String[]{"localhost"});
@@ -54,6 +55,10 @@ public final class WorkerMain {
                 new WorkerSocketManagerImpl(new Socket("127.0.0.1", 6666))
         )) {
             worker.loop();
+        } finally {
+            // shutdownNow also interrupts running threads, which is needed to shut down network stuff
+            cpuThreadPool.shutdownNow();
+            ioThreadPool.shutdownNow();
         }
     }
 }

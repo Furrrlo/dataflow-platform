@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.TimeUnit;
 
@@ -33,18 +32,15 @@ public class Coordinator implements Closeable {
 
     private final WorkDirFileLoader fileLoader;
     private final Parser parser;
-    private final ExecutorService threadPool;
     private final CoordinatorDfs dfs;
     private final WorkerManager workerManager;
 
     public Coordinator(WorkDirFileLoader fileLoader,
                        Parser parser,
-                       ExecutorService threadPool,
                        CoordinatorDfs dfs,
                        WorkerManager workerManager) {
         this.fileLoader = fileLoader;
         this.parser = parser;
-        this.threadPool = threadPool;
         this.dfs = dfs;
         this.workerManager = workerManager;
     }
@@ -52,7 +48,8 @@ public class Coordinator implements Closeable {
     @Override
     @SuppressWarnings("EmptyTryBlock")
     public void close() throws IOException {
-        try(var _ = workerManager; var _ = dfs; var _ = threadPool) {
+        try(var _ = dfs;
+            var _ = workerManager) {
             // I just want to close all of them
         }
     }
@@ -161,6 +158,7 @@ public class Coordinator implements Closeable {
             if(wasShuffled && op.kind().isRequiresShuffling())
                 return ops;
 
+            ops.add(op);
             wasShuffled = wasShuffled || op.kind().isShuffles();
         }
 
