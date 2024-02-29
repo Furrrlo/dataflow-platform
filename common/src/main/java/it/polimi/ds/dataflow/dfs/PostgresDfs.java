@@ -305,7 +305,7 @@ public class PostgresDfs implements Dfs {
                             .column(KEY_HASH_COLUMN)
                             .column(DATA_COLUMN)
                             .check(PARTITION_COLUMN.eq(partition)),
-                    createKeyHashIndex(ctx, table));
+                    createKeyHashIndex(ctx, table, flags));
         }
 
         public static Query createCoordinatorTable(DSLContext ctx,
@@ -340,13 +340,17 @@ public class PostgresDfs implements Dfs {
                         \{createNonForeignTable.getSQL()} \
                         PARTITION BY RANGE (partition)\
                         """),
-                    createKeyHashIndex(ctx, table));
+                    createKeyHashIndex(ctx, table, flags));
         }
 
         @SuppressWarnings("TrailingWhitespacesInTextBlock")
-        private static Query createKeyHashIndex(DSLContext ctx, Table<Record> table) {
+        private static Query createKeyHashIndex(DSLContext ctx,
+                                                Table<Record> table,
+                                                @MagicConstant(flags = { IF_NOT_EXISTS }) int flags) {
+            boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
             return ctx.query(STR."""
-                     CREATE INDEX \{ctx.render(name(table.getName() + "_keyhash_btree_index"))} \
+                     CREATE INDEX \{ifNotExists ? "IF NOT EXISTS " : ""}\
+                     \{ctx.render(name(table.getName() + "_keyhash_btree_index"))} \
                      ON \{ctx.render(table)} \
                      USING btree (\{ctx.render(KEY_HASH_COLUMN)} ASC)\
                      """);
