@@ -90,9 +90,16 @@ public class PostgresDfs implements Dfs {
         String coordinatorName = this.coordinatorName;
         boolean hasCoordinator = coordinatorName != null;
         if(hasCoordinator) {
-            DfsFileTable
-                    .createCoordinatorTable(ctx, coordinatorName, file, IF_NOT_EXISTS | FOREIGN)
-                    .execute();
+            ctx.transaction(tx -> {
+                // CREATE TABLE IF NOT EXISTS may fail in concurrent settings
+                // with a unique index violation on some internal pg index
+                // See https://www.postgresql.org/message-id/CA+TgmoZAdYVtwBfp1FL2sMZbiHCWT4UPrzRLNnX1Nb30Ku3-gg@mail.gmail.com
+                // Use locks as suggested to avoid that
+                tx.dsl().select(field("pg_advisory_xact_lock(123)")).execute();
+                DfsFileTable
+                        .createCoordinatorTable(tx.dsl(), coordinatorName, file, IF_NOT_EXISTS | FOREIGN)
+                        .execute();
+            });
         }
 
         DfsFileTable
