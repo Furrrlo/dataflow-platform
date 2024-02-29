@@ -1,17 +1,19 @@
 package it.polimi.ds.dataflow.coordinator.dfs;
 
 import it.polimi.ds.dataflow.Tuple2;
-import it.polimi.ds.dataflow.dfs.*;
+import it.polimi.ds.dataflow.coordinator.PostgresWorker;
+import it.polimi.ds.dataflow.dfs.DfsFile;
+import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
+import it.polimi.ds.dataflow.dfs.PostgresDfs;
+import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import static it.polimi.ds.dataflow.coordinator.PostgresWorker.createDataSourceFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.abort;
 
@@ -49,7 +52,7 @@ class PostgresCoordinatorDfsTest {
             .withPassword("password")
             .withDatabaseName("postgres");
     @SuppressWarnings("NullAway.Init") // Initialized in a weird way
-    static Worker WORKER1;
+    static PostgresWorker WORKER1;
 
     @Container
     @SuppressWarnings("resource")
@@ -60,12 +63,9 @@ class PostgresCoordinatorDfsTest {
             .withPassword("password")
             .withDatabaseName("postgres");
     @SuppressWarnings("NullAway.Init") // Initialized in a weird way
-    static Worker WORKER2;
+    static PostgresWorker WORKER2;
 
-    static List<Worker> WORKERS;
-
-    record Worker(String postgresNodeName, PostgreSQLContainer<?> container, DataSource ds, Dfs dfs) {
-    }
+    static List<PostgresWorker> WORKERS;
 
     @BeforeAll
     @SuppressWarnings({"SqlResolve", "TrailingWhitespacesInTextBlock"})
@@ -82,47 +82,32 @@ class PostgresCoordinatorDfsTest {
             }
         };
 
-        COORDINATOR_DFS = new PostgresCoordinatorDfs(serde, config -> {
-            PGSimpleDataSource ds = new PGSimpleDataSource();
-            ds.setUrl(COORDINATOR_NODE.getJdbcUrl());
-            ds.setUser(COORDINATOR_NODE.getUsername());
-            ds.setPassword(COORDINATOR_NODE.getPassword());
-            ds.setDatabaseName(COORDINATOR_NODE.getDatabaseName());
-            config.setDataSource(ds);
-        });
+        COORDINATOR_DFS = new PostgresCoordinatorDfs(
+                serde,
+                config -> config.setDataSource(createDataSourceFor(COORDINATOR_NODE)));
 
-        record TempWorker(String name, PostgreSQLContainer<?> container, Consumer<Worker> workerSetter) {
+        record TempWorker(String name, PostgreSQLContainer<?> container, Consumer<PostgresWorker> workerSetter) {
         }
 
         WORKERS = Stream.of(
                 new TempWorker("worker1", WORKER1_NODE, (w) -> WORKER1 = w),
                 new TempWorker("worker2", WORKER2_NODE, (w) -> WORKER2 = w)
         ).map(w -> {
-            var ds = new PGSimpleDataSource();
-            ds.setUrl(w.container.getJdbcUrl());
-            ds.setUser(w.container.getUsername());
-            ds.setPassword(w.container.getPassword());
-            ds.setDatabaseName(w.container.getDatabaseName());
-            return new Worker(w.name, w.container, ds, new PostgresDfs("coordinator", serde, config -> {
-                config.setDataSource(ds);
-            }));
+            var ds = createDataSourceFor(w.container);
+            return new PostgresWorker(w.name, w.container, ds, new PostgresDfs(
+                    "coordinator", serde,
+                    config -> config.setDataSource(ds)));
         }).toList();
 
         WORKERS.forEach(w -> COORDINATOR_DFS.addForeignServer(w.postgresNodeName()));
 
-        PGSimpleDataSource coordinatorDs = new PGSimpleDataSource();
-        coordinatorDs.setUrl(COORDINATOR_NODE.getJdbcUrl());
-        coordinatorDs.setUser(COORDINATOR_NODE.getUsername());
-        coordinatorDs.setPassword(COORDINATOR_NODE.getPassword());
-        coordinatorDs.setDatabaseName(COORDINATOR_NODE.getDatabaseName());
-
-        try(Connection connection = coordinatorDs.getConnection();
+        try(Connection connection = createDataSourceFor(COORDINATOR_NODE).getConnection();
             Statement statement = connection.createStatement()) {
             statement.execute("CREATE EXTENSION IF NOT EXISTS postgres_fdw");
 
             for (var workerEntry : WORKERS) {
                 var workerNodeName = workerEntry.postgresNodeName();
-                var worker = workerEntry.container;
+                var worker = workerEntry.getContainer();
 
                 statement.execute(STR."""
                     CREATE SERVER IF NOT EXISTS \{workerNodeName} FOREIGN DATA WRAPPER postgres_fdw
@@ -135,15 +120,9 @@ class PostgresCoordinatorDfsTest {
         }
 
         for (var workerEntry : WORKERS) {
-            var workerNode = workerEntry.container;
+            var workerNode = workerEntry.getContainer();
 
-            PGSimpleDataSource workerDs = new PGSimpleDataSource();
-            workerDs.setUrl(workerNode.getJdbcUrl());
-            workerDs.setUser(workerNode.getUsername());
-            workerDs.setPassword(workerNode.getPassword());
-            workerDs.setDatabaseName(workerNode.getDatabaseName());
-
-            try(Connection connection = workerDs.getConnection();
+            try(Connection connection = createDataSourceFor(workerNode).getConnection();
                 Statement statement = connection.createStatement()) {
                 statement.execute(STR."""
                     CREATE EXTENSION IF NOT EXISTS postgres_fdw;
@@ -164,7 +143,7 @@ class PostgresCoordinatorDfsTest {
         var exs = new ArrayList<Throwable>();
         WORKERS.forEach(w -> {
             try {
-                w.container.close();
+                w.getContainer().close();
             } catch (Throwable t) {
                 exs.add(t);
             }
@@ -206,13 +185,13 @@ class PostgresCoordinatorDfsTest {
 
         // Create the file partition on the correct workers and try to write into it
         for (DfsFilePartitionInfo partition : coordinatorPartitionedFile.partitions()) {
-            Worker worker = WORKERS.stream()
+            PostgresWorker worker = WORKERS.stream()
                     .filter(w -> partition.dfsNodeName().equals(w.postgresNodeName()))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException(STR."Missing node for partition \{partition}"));
-            worker.dfs.createFilePartition(partition.fileName(), partition.partition());
+            worker.getDfs().createFilePartition(partition.fileName(), partition.partition());
 
-            var workerFile = worker.dfs.findFile(partition.fileName());
+            var workerFile = worker.getDfs().findFile(partition.fileName());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +
@@ -220,7 +199,7 @@ class PostgresCoordinatorDfsTest {
                         STR."\"value\": \"\{t.value()}\", " +
                         STR."\"partition\": \"\{partition.partition()}\"" +
                         "}", "");
-                worker.dfs.writeInPartition(workerFile, tuple, partition.partition());
+                worker.getDfs().writeInPartition(workerFile, tuple, partition.partition());
                 tuplesToRead.add(tuple);
             });
         }
@@ -232,14 +211,14 @@ class PostgresCoordinatorDfsTest {
 
         // Try to write from one which does not own the partition
         for (DfsFilePartitionInfo partition : coordinatorPartitionedFile.partitions()) {
-            Worker worker = WORKERS.stream()
+            PostgresWorker worker = WORKERS.stream()
                     .filter(w -> !partition.dfsNodeName().equals(w.postgresNodeName()))
                     .findFirst()
                     .orElse(null);
             if(worker == null)
                 continue;
 
-            var workerFile = worker.dfs.findFile(partition.fileName());
+            var workerFile = worker.getDfs().findFile(partition.fileName());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +
@@ -247,7 +226,7 @@ class PostgresCoordinatorDfsTest {
                         STR."\"value\": \"\{t.value()}\", " +
                         STR."\"partition\": \"\{partition.partition()}\"" +
                         "}", "");
-                worker.dfs.writeInPartition(workerFile, tuple, partition.partition());
+                worker.getDfs().writeInPartition(workerFile, tuple, partition.partition());
                 tuplesToRead.add(tuple);
             });
         }

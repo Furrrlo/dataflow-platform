@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.Parser;
-import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -20,7 +19,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
@@ -38,6 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static it.polimi.ds.dataflow.coordinator.PostgresWorker.createDataSourceFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -185,15 +184,6 @@ class CoordinatorTest {
             });
         }
         WORKERS = List.copyOf(WORKERS);
-    }
-
-    private static DataSource createDataSourceFor(PostgreSQLContainer<?> container) {
-        PGSimpleDataSource workerDs = new PGSimpleDataSource();
-        workerDs.setUrl(container.getJdbcUrl());
-        workerDs.setUser(container.getUsername());
-        workerDs.setPassword(container.getPassword());
-        workerDs.setDatabaseName(container.getDatabaseName());
-        return workerDs;
     }
 
     @AfterAll
