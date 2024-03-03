@@ -1,11 +1,11 @@
 package it.polimi.ds.dataflow.worker;
 
 import it.polimi.ds.dataflow.dfs.CreateFileOptions;
-import it.polimi.ds.dataflow.dfs.Dfs;
 import it.polimi.ds.dataflow.js.CompiledProgram;
 import it.polimi.ds.dataflow.js.Program;
 import it.polimi.ds.dataflow.socket.packets.*;
 import it.polimi.ds.dataflow.utils.ThreadPools;
+import it.polimi.ds.dataflow.worker.dfs.WorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,16 +16,19 @@ import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
+import static it.polimi.ds.dataflow.dfs.Dfs.BatchRead;
+
 public class Worker implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Worker.class);
 
     private final UUID uuid;
+    private final static String DEFAULT_BACKUP_TABLE_NAME = "backups";
     private final String dfsNodeName;
     private final ScriptEngine engine;
     private final ExecutorService ioThreadPool;
     private final ExecutorService cpuThreadPool;
-    private final Dfs dfs;
+    private final WorkerDfs dfs;
     private final WorkerSocketManager socket;
 
     public Worker(UUID uuid,
@@ -33,7 +36,7 @@ public class Worker implements Closeable {
                   ScriptEngine engine,
                   ExecutorService ioThreadPool,
                   ExecutorService cpuThreadPool,
-                  Dfs dfs,
+                  WorkerDfs dfs,
                   WorkerSocketManager socket) {
         this.uuid = uuid;
         this.dfsNodeName = dfsNodeName;
@@ -47,8 +50,8 @@ public class Worker implements Closeable {
     @Override
     @SuppressWarnings("EmptyTryBlock")
     public void close() throws IOException {
-        try(var _ = dfs;
-            var _ = socket) {
+        try (var _ = dfs;
+             var _ = socket) {
             // I just want to close everything
         }
     }
@@ -56,10 +59,12 @@ public class Worker implements Closeable {
     public void loop() throws IOException {
         socket.send(new HelloPacket(uuid, dfsNodeName));
 
+        //Creating a new table to store the backup information for fault tolerance
+        dfs.createBackupFile(DEFAULT_BACKUP_TABLE_NAME);
         while (!Thread.interrupted()) {
             var ctx0 = socket.receive(CoordinatorRequestPacket.class);
             ioThreadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
-                try(var ctx = ctx0) {
+                try (var ctx = ctx0) {
                     ctx.reply(switch (ctx.getPacket()) {
                         case ScheduleJobPacket pkt -> onScheduleJob(pkt);
                         case CreateFilePartitionPacket pkt -> onCreateFilePartition(pkt);
@@ -84,18 +89,25 @@ public class Worker implements Closeable {
 
             var compileOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
 
+
             Integer nextBatchPtr = null;
-            while(true) {
+            while (true) {
                 var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
-                if(currentBatch.data().isEmpty())
+
+                //Saving backup information for fault tolerance
+                dfs.updateBackupFile(DEFAULT_BACKUP_TABLE_NAME, new WorkerDfs.BackupInfo(
+                        this.uuid,pkt.jobId(),pkt.partition(),currentBatch.nextBatchPtr()));
+
+                if (currentBatch.data().isEmpty()) {
                     break;
+                }
 
                 var currentBatchData = currentBatch.data();
                 var currentBatchRes = cpuThreadPool
                         .submit(() -> CompiledProgram.execute(compileOps, currentBatchData.stream()).toList())
                         .get();
 
-                if(pkt.reshuffle())
+                if (pkt.reshuffle())
                     dfs.writeBatch(dfsDstFile, currentBatchRes);
                 else
                     dfs.writeBatchInPartition(dfsDstFile, pkt.partition(), currentBatchRes);
@@ -118,5 +130,17 @@ public class Worker implements Closeable {
         } catch (Exception ex) {
             return new CreateFilePartitionFailurePacket(ex);
         }
+    }
+
+    private void saveComputationBackup(String dfsBackupFileName,
+                                       ScheduleJobPacket pkt,
+                                       BatchRead currentBatch) {
+        dfs.updateBackupFile(dfsBackupFileName,
+                new WorkerDfs.BackupInfo(
+                        this.uuid,
+                        pkt.jobId(),
+                        pkt.partition(),
+                        currentBatch.nextBatchPtr()
+                ));
     }
 }

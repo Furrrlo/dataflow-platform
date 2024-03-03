@@ -4,9 +4,9 @@ import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.coordinator.PostgresWorker;
 import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
-import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import it.polimi.ds.dataflow.utils.Closeables;
+import it.polimi.ds.dataflow.worker.dfs.PostgresWorkerDfs;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -94,7 +94,7 @@ class PostgresCoordinatorDfsTest {
                 new TempWorker("worker2", WORKER2_NODE, (w) -> WORKER2 = w)
         ).map(w -> {
             var ds = createDataSourceFor(w.container);
-            return new PostgresWorker(w.name, w.container, ds, new PostgresDfs(
+            return new PostgresWorker(w.name, w.container, ds, new PostgresWorkerDfs(
                     "coordinator", serde,
                     config -> config.setDataSource(ds)));
         }).toList();

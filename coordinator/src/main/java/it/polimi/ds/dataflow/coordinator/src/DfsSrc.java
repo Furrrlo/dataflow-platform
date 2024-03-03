@@ -1,9 +1,9 @@
 package it.polimi.ds.dataflow.coordinator.src;
 
 import com.google.errorprone.annotations.MustBeClosed;
+import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
 import it.polimi.ds.dataflow.dfs.DfsFile;
-import it.polimi.ds.dataflow.Tuple2;
 import org.jspecify.annotations.Nullable;
 
 import java.util.stream.Stream;

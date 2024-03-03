@@ -1,8 +1,8 @@
 package it.polimi.ds.dataflow.worker;
 
-import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.worker.dfs.PostgresWorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -45,7 +45,7 @@ public final class WorkerMain {
                 engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
                 ioThreadPool,
                 cpuThreadPool,
-                new PostgresDfs(engine, dfsCoordinatorName, config -> {
+                new PostgresWorkerDfs(engine, dfsCoordinatorName, config -> {
                     PGSimpleDataSource ds = new PGSimpleDataSource();
                     ds.setServerNames(new String[]{"localhost"});
                     ds.setUser("postgres");

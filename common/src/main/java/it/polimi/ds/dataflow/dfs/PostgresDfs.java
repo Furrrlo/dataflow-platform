@@ -17,10 +17,7 @@ import javax.script.ScriptException;
 import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -77,19 +74,19 @@ public class PostgresDfs implements Dfs {
             value = "BC_VACUOUS_INSTANCEOF",
             justification = "Don't want to have to declare it as a HikariDataSource")
     public void close() throws IOException {
-        if(dataSource instanceof Closeable closeableDs)
+        if (dataSource instanceof Closeable closeableDs)
             closeableDs.close();
     }
 
     @Override
     public void createFilePartition(String file, int partition, CreateFileOptions... options) {
         boolean failIfExists = Arrays.stream(options).noneMatch(o -> o == CreateFileOptions.IF_NOT_EXISTS);
-        if(failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
+        if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
 
         String coordinatorName = this.coordinatorName;
         boolean hasCoordinator = coordinatorName != null;
-        if(hasCoordinator) {
+        if (hasCoordinator) {
             ctx.transaction(tx -> {
                 // CREATE TABLE IF NOT EXISTS may fail in concurrent settings
                 // with a unique index violation on some internal pg index
@@ -254,7 +251,18 @@ public class PostgresDfs implements Dfs {
     }
 
     public static final class DfsFileTable {
+        //Backup table's columns
+        public static final Field<UUID> UUID_COLUMN = field(
+                name("uuid"),
+                SQLDataType.UUID.notNull());
+        public static final Field<Integer> JOB_ID_COLUMN = field(
+                name("jobId"),
+                SQLDataType.INTEGER.notNull());
+        public static final Field<Integer> NEXT_BATCH_PTR_COLUMN = field(
+                name("nextBatchPtr"),
+                SQLDataType.INTEGER.notNull());
 
+        //Data table's columns
         public static final Field<Integer> PARTITION_COLUMN = field(
                 name("partition"),
                 SQLDataType.INTEGER.notNull());
@@ -287,7 +295,7 @@ public class PostgresDfs implements Dfs {
         public static Query createPartitionTable(DSLContext ctx,
                                                  String fileName,
                                                  int partition,
-                                                 @MagicConstant(flags = { IF_NOT_EXISTS }) int flags) {
+                                                 @MagicConstant(flags = {IF_NOT_EXISTS}) int flags) {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
             var table = DfsFileTable.partitionTableFor(fileName, partition);
             var createTable = ifNotExists
@@ -305,7 +313,7 @@ public class PostgresDfs implements Dfs {
         public static Query createCoordinatorTable(DSLContext ctx,
                                                    String coordinatorName,
                                                    String fileName,
-                                                   @MagicConstant(flags = { IF_NOT_EXISTS, FOREIGN }) int flags) {
+                                                   @MagicConstant(flags = {IF_NOT_EXISTS, FOREIGN}) int flags) {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
             boolean foreign = (flags & FOREIGN) != 0;
 
@@ -318,7 +326,7 @@ public class PostgresDfs implements Dfs {
                     .column(KEY_HASH_COLUMN)
                     .column(DATA_COLUMN);
 
-            if(foreign) {
+            if (foreign) {
                 // Cannot declare indexes on foreign tables
                 return ctx.query(STR."""
                         \{
@@ -340,7 +348,7 @@ public class PostgresDfs implements Dfs {
         @SuppressWarnings("TrailingWhitespacesInTextBlock")
         private static Query createKeyHashIndex(DSLContext ctx,
                                                 Table<Record> table,
-                                                @MagicConstant(flags = { IF_NOT_EXISTS }) int flags) {
+                                                @MagicConstant(flags = {IF_NOT_EXISTS}) int flags) {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
             return ctx.query(STR."""
                      CREATE INDEX \{ifNotExists ? "IF NOT EXISTS " : ""}\

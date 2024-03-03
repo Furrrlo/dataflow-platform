@@ -2,10 +2,10 @@ package it.polimi.ds.dataflow.coordinator;
 
 import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
-import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.Closeables;
 import it.polimi.ds.dataflow.worker.Worker;
+import it.polimi.ds.dataflow.worker.dfs.PostgresWorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -112,7 +112,7 @@ class CoordinatorTest {
             var ds = createDataSourceFor(container);
             POSTGRES_WORKERS.add(new PostgresWorker(
                     name, container, ds,
-                    new PostgresDfs(
+                    new PostgresWorkerDfs(
                             engineFactory.get(),
                             "coordinator",
                             config -> config.setDataSource(ds))));
