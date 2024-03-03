@@ -19,9 +19,8 @@ import java.util.concurrent.ExecutorService;
 public class Worker implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Worker.class);
-
-    private final UUID uuid;
     private final static String DEFAULT_BACKUP_TABLE_NAME = "backups";
+    private final UUID uuid;
     private final String dfsNodeName;
     private final ScriptEngine engine;
     private final ExecutorService ioThreadPool;
@@ -94,7 +93,7 @@ public class Worker implements Closeable {
 
                 //Saving backup information for fault tolerance
                 dfs.updateBackupFile(DEFAULT_BACKUP_TABLE_NAME, new WorkerDfs.BackupInfo(
-                        this.uuid,pkt.jobId(),pkt.partition(),currentBatch.nextBatchPtr()));
+                        this.uuid, pkt.jobId(), pkt.partition(), currentBatch.nextBatchPtr()));
 
                 if (currentBatch.data().isEmpty()) {
                     break;
