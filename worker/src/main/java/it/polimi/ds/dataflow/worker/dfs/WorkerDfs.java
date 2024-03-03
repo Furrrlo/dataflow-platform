@@ -2,6 +2,7 @@ package it.polimi.ds.dataflow.worker.dfs;
 
 import com.google.errorprone.annotations.MustBeClosed;
 import it.polimi.ds.dataflow.dfs.Dfs;
+import org.jspecify.annotations.Nullable;
 
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -20,6 +21,6 @@ public interface WorkerDfs extends Dfs {
 
     String findFile(String name);
 
-    record BackupInfo(UUID uuid, int jobId, int partition, Integer nextBatchPtr) {
+    record BackupInfo(UUID uuid, int jobId, int partition, @Nullable Integer nextBatchPtr) {
     }
 }

@@ -16,8 +16,6 @@ import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
-import static it.polimi.ds.dataflow.dfs.Dfs.BatchRead;
-
 public class Worker implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Worker.class);
@@ -130,17 +128,5 @@ public class Worker implements Closeable {
         } catch (Exception ex) {
             return new CreateFilePartitionFailurePacket(ex);
         }
-    }
-
-    private void saveComputationBackup(String dfsBackupFileName,
-                                       ScheduleJobPacket pkt,
-                                       BatchRead currentBatch) {
-        dfs.updateBackupFile(dfsBackupFileName,
-                new WorkerDfs.BackupInfo(
-                        this.uuid,
-                        pkt.jobId(),
-                        pkt.partition(),
-                        currentBatch.nextBatchPtr()
-                ));
     }
 }
