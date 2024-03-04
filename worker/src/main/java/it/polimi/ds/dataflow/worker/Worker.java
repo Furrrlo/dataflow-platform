@@ -19,7 +19,7 @@ import java.util.concurrent.ExecutorService;
 public class Worker implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Worker.class);
-    private final static String DEFAULT_BACKUP_TABLE_NAME = "backups";
+
     private final UUID uuid;
     private final String dfsNodeName;
     private final ScriptEngine engine;
