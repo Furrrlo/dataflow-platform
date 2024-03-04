@@ -21,6 +21,10 @@ public final class UuidHandler {
     private UuidHandler() {
     }
 
+    /**
+     * @param fileLoader fileLoader necessary to access the file
+     * @return a UUID
+     */
     public static UUID getUuid(WorkDirFileLoader fileLoader) throws IOException {
         try {
             return getUuid(fileLoader, DEFAULT_UUID_FILE_NAME);
@@ -29,6 +33,12 @@ public final class UuidHandler {
         }
     }
 
+    /**
+     * Create the uuid file if not already exists and return the first UUID found in the file
+     * @param fileLoader fileLoader necessary to access the file
+     * @param uuidFileName name of the file used to store the UUIDs
+     * @return the first uuid found in the file
+     */
     @VisibleForTesting
     @SuppressWarnings("SameParameterValue")
     static UUID getUuid(WorkDirFileLoader fileLoader, String uuidFileName) throws IOException {
@@ -47,6 +57,11 @@ public final class UuidHandler {
         }
     }
 
+    /**
+     * create a new UUID in the file
+     * @param uuidFile name of the UUIDs' file
+     * @return the UUID just created
+     */
     private static UUID createNewUuid(Path uuidFile) throws IOException {
         UUID uuid = UUID.randomUUID();
         try (BufferedWriter fileWriter = Files.newBufferedWriter(uuidFile, StandardCharsets.UTF_8)) {

@@ -15,10 +15,19 @@ public class WorkDirFileLoader {
 
     private final Path baseDir;
 
+    /**
+     *
+     * @param baseDir base path from which start the file's path resolve
+     */
     public WorkDirFileLoader(Path baseDir) {
         this.baseDir = baseDir.toAbsolutePath().normalize();
     }
 
+
+    /**
+     * @param fileName name of the file we want
+     * @return control if the file is in the Jar, if true return the file otherwise create a new file
+     */
     public InputStream loadResourceAsStream(String fileName) throws IOException {
         final InputStream inJarIs = WorkDirFileLoader.class.getResourceAsStream(fileName);
         if (inJarIs != null)
@@ -27,16 +36,28 @@ public class WorkDirFileLoader {
         return Files.newInputStream(ensureNoFileTraversal(fileName));
     }
 
+    /**
+     * @param file name of the file we want
+     * @return true if the file exists, otherwise false
+     */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public boolean resourceExists(String file) {
         final URL inJarIs = WorkDirFileLoader.class.getResource(file);
         return inJarIs != null || Files.exists(ensureNoFileTraversal(file));
     }
 
+    /**
+     * @param path path of the file we want
+     * @return
+     */
     public Path resolvePath(String path) {
         return ensureNoFileTraversal(path);
     }
 
+    /**
+     * @param fileName path of the file we want
+     * @return the path resolved if is in the workspace
+     */
     private Path ensureNoFileTraversal(String fileName) {
         Path path = baseDir.resolve(fileName).normalize();
         if(!path.startsWith(baseDir))

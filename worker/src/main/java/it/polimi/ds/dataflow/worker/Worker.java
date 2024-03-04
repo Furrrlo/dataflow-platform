@@ -77,6 +77,16 @@ public class Worker implements Closeable {
         }
     }
 
+    /**
+     * Handles the reception of a {@link ScheduleJobPacket} by creating a new file partition in the
+     * DFS if it doesn't exist yet. Execute the operation on batches of the partition's data specified
+     * in the packet. Check if shuffle is needed and write in appropriate partitions according to the
+     * {@link ScheduleJobPacket#reshuffle()}
+     *
+     * @param pkt
+     * @return
+     * @throws InterruptedException
+     */
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions());
@@ -84,7 +94,7 @@ public class Worker implements Closeable {
             dfs.createFilePartition(pkt.dfsDstFileName(), pkt.partition(), CreateFileOptions.IF_NOT_EXISTS);
             var dfsDstFile = dfs.findFile(pkt.dfsDstFileName(), pkt.partitions());
 
-            var compileOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
+            var compiledOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
 
 
             Integer nextBatchPtr = null;
@@ -101,7 +111,7 @@ public class Worker implements Closeable {
 
                 var currentBatchData = currentBatch.data();
                 var currentBatchRes = cpuThreadPool
-                        .submit(() -> CompiledProgram.execute(compileOps, currentBatchData.stream()).toList())
+                        .submit(() -> CompiledProgram.execute(compiledOps, currentBatchData.stream()).toList())
                         .get();
 
                 if (pkt.reshuffle())
@@ -120,6 +130,10 @@ public class Worker implements Closeable {
         }
     }
 
+    /**
+     * @param pkt packet with the info of the partition that must be created
+     * @return a successful packet if the partition has been correctly created, a failure packet otherwise
+     */
     private CreateFilePartitionResultPacket onCreateFilePartition(CreateFilePartitionPacket pkt) {
         try {
             dfs.createFilePartition(pkt.fileName(), pkt.partitionNum());

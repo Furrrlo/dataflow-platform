@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Coordinator implements Closeable {
 
-    private static final boolean RESHUFFLE_IN_WORKERS = false;
+    private static final boolean RESHUFFLE_IN_WORKERS = true;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Coordinator.class);
 
