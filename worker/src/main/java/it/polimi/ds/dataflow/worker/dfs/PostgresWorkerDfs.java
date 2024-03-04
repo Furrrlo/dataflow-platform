@@ -2,6 +2,7 @@ package it.polimi.ds.dataflow.worker.dfs;
 
 import com.google.errorprone.annotations.MustBeClosed;
 import com.zaxxer.hikari.HikariConfig;
+import it.polimi.ds.dataflow.dfs.CreateFileOptions;
 import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import org.jooq.CreateTableElementListStep;
@@ -13,14 +14,36 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.*;
+import static org.jooq.impl.DSL.field;
 
 public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
+
+    private final String coordinatorName;
+
     public PostgresWorkerDfs(ScriptEngine engine, String coordinatorName, Consumer<HikariConfig> configurator) throws ScriptException {
-        super(engine, coordinatorName, configurator);
+        super(engine, configurator);
+        this.coordinatorName = coordinatorName;
     }
 
     public PostgresWorkerDfs(String coordinatorName, Tuple2JsonSerde serde, Consumer<HikariConfig> configurator) {
-        super(coordinatorName, serde, configurator);
+        super(serde, configurator);
+        this.coordinatorName = coordinatorName;
+    }
+
+    @Override
+    public void createFilePartition(String file, int partition, CreateFileOptions... options) {
+        ctx.transaction(tx -> {
+            // CREATE TABLE IF NOT EXISTS may fail in concurrent settings
+            // with a unique index violation on some internal pg index
+            // See https://www.postgresql.org/message-id/CA+TgmoZAdYVtwBfp1FL2sMZbiHCWT4UPrzRLNnX1Nb30Ku3-gg@mail.gmail.com
+            // Use locks as suggested to avoid that
+            tx.dsl().select(field("pg_advisory_xact_lock(123)")).execute();
+            DfsFileTable
+                    .createCoordinatorTable(tx.dsl(), coordinatorName, file, IF_NOT_EXISTS | FOREIGN)
+                    .execute();
+        });
+
+        super.createFilePartition(file, partition, options);
     }
 
     @Override

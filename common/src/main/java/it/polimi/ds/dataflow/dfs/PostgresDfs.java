@@ -34,32 +34,11 @@ public class PostgresDfs implements Dfs {
     protected final DSLContext ctx;
     protected final Tuple2JsonSerde serde;
 
-    private final @Nullable String coordinatorName;
-
-    public PostgresDfs(ScriptEngine engine, String coordinatorName, Consumer<HikariConfig> configurator) throws ScriptException {
-        this(coordinatorName, new JacksonTuple2Serde(engine), configurator);
-    }
-
-    public PostgresDfs(String coordinatorName,
-                       Tuple2JsonSerde serde,
-                       Consumer<HikariConfig> configurator) {
-        this(coordinatorName, serde, configurator, null);
-    }
-
     protected PostgresDfs(ScriptEngine engine, Consumer<HikariConfig> configurator) throws ScriptException {
         this(new JacksonTuple2Serde(engine), configurator);
     }
 
-    protected PostgresDfs(Tuple2JsonSerde serde,
-                          Consumer<HikariConfig> configurator) {
-        this(null, serde, configurator, null);
-    }
-
-    private PostgresDfs(@Nullable String coordinatorName,
-                        Tuple2JsonSerde serde,
-                        Consumer<HikariConfig> configurator,
-                        @SuppressWarnings("unused") @Nullable Void unused) {
-        this.coordinatorName = coordinatorName;
+    protected PostgresDfs(Tuple2JsonSerde serde, Consumer<HikariConfig> configurator) {
         this.serde = serde;
 
         var config = new HikariConfig();
@@ -83,21 +62,6 @@ public class PostgresDfs implements Dfs {
         boolean failIfExists = Arrays.stream(options).noneMatch(o -> o == CreateFileOptions.IF_NOT_EXISTS);
         if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
-
-        String coordinatorName = this.coordinatorName;
-        boolean hasCoordinator = coordinatorName != null;
-        if (hasCoordinator) {
-            ctx.transaction(tx -> {
-                // CREATE TABLE IF NOT EXISTS may fail in concurrent settings
-                // with a unique index violation on some internal pg index
-                // See https://www.postgresql.org/message-id/CA+TgmoZAdYVtwBfp1FL2sMZbiHCWT4UPrzRLNnX1Nb30Ku3-gg@mail.gmail.com
-                // Use locks as suggested to avoid that
-                tx.dsl().select(field("pg_advisory_xact_lock(123)")).execute();
-                DfsFileTable
-                        .createCoordinatorTable(tx.dsl(), coordinatorName, file, IF_NOT_EXISTS | FOREIGN)
-                        .execute();
-            });
-        }
 
         DfsFileTable
                 .createPartitionTable(ctx, file, partition, failIfExists ? 0 : IF_NOT_EXISTS)
