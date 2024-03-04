@@ -21,10 +21,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-import static it.polimi.ds.dataflow.coordinator.PostgresWorker.createDataSourceFor;
+import static it.polimi.ds.dataflow.dfs.TestcontainerUtil.createDataSourceFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.abort;
 
@@ -95,7 +96,7 @@ class PostgresCoordinatorDfsTest {
         ).map(w -> {
             var ds = createDataSourceFor(w.container);
             return new PostgresWorker(w.name, w.container, ds, new PostgresWorkerDfs(
-                    "coordinator", serde,
+                    "coordinator", UUID.randomUUID(), serde,
                     config -> config.setDataSource(ds)));
         }).toList();
 

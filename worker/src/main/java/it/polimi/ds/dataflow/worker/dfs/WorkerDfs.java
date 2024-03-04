@@ -1,26 +1,28 @@
 package it.polimi.ds.dataflow.worker.dfs;
 
-import com.google.errorprone.annotations.MustBeClosed;
+import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.dfs.Dfs;
+import it.polimi.ds.dataflow.dfs.DfsFile;
 import org.jspecify.annotations.Nullable;
 
-import java.util.UUID;
-import java.util.stream.Stream;
+import java.util.Collection;
 
 public interface WorkerDfs extends Dfs {
-    void createBackupFile(String name);
 
-    void updateBackupFile(String fileName, BackupInfo backupInfo);
+    void writeBackupInfo(int jobId, int partition, @Nullable Integer nextBatchPtr);
 
-    void writeBackupInfo(String fileName, BackupInfo backupInfo);
+    void writeBatchAndBackup(int jobId,
+                             int srcPartition,
+                             DfsFile dstFile,
+                             Collection<Tuple2> tuple,
+                             @Nullable Integer nextBatchPtr);
 
-    void deleteBackupFile(String fileName, UUID toDelete);
+    void writeBatchInPartitionAndBackup(int jobId,
+                                        int srcPartition,
+                                        DfsFile dstFile,
+                                        int dstPartition,
+                                        Collection<Tuple2> tuple,
+                                        @Nullable Integer nextBatchPtr);
 
-    @MustBeClosed
-    Stream<BackupInfo> loadAll(String name);
-
-    String findFile(String name);
-
-    record BackupInfo(UUID uuid, int jobId, int partition, @Nullable Integer nextBatchPtr) {
-    }
+    void deleteBackup(int jobId, int partition);
 }

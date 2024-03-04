@@ -132,6 +132,10 @@ public class PostgresDfs implements Dfs {
 
     @Override
     public void writeBatch(DfsFile file, Collection<Tuple2> tuples) {
+        doWriteBatch(ctx, file, tuples);
+    }
+
+    protected void doWriteBatch(DSLContext ctx, DfsFile file, Collection<Tuple2> tuples) {
         Map<Integer, List<Tuple2>> batches = tuples.stream().collect(Collectors.groupingBy(
                 e -> calculatePartition(e, file.partitionsNum()),
                 Collectors.toList()));
@@ -159,11 +163,15 @@ public class PostgresDfs implements Dfs {
                 }).collect(Collectors.toList())
         ).execute();
 
-        localBatches.forEach((partition, data) -> writeBatchInPartition(file, partition, data));
+        localBatches.forEach((partition, data) -> doWriteBatchInPartition(ctx, file, partition, data));
     }
 
     @Override
     public void writeBatchInPartition(DfsFile file, int partition, Collection<Tuple2> tuples) {
+        doWriteBatchInPartition(ctx, file, partition, tuples);
+    }
+
+    protected void doWriteBatchInPartition(DSLContext ctx, DfsFile file, int partition, Collection<Tuple2> tuples) {
         boolean isLocal = isPartitionLocal(file, partition);
 
         ctx.batch(tuples.stream()
@@ -215,18 +223,6 @@ public class PostgresDfs implements Dfs {
     }
 
     public static final class DfsFileTable {
-        //Backup table's columns
-        public static final Field<UUID> UUID_COLUMN = field(
-                name("uuid"),
-                SQLDataType.UUID.notNull());
-        public static final Field<Integer> JOB_ID_COLUMN = field(
-                name("jobId"),
-                SQLDataType.INTEGER.notNull());
-        public static final Field<Integer> NEXT_BATCH_PTR_COLUMN = field(
-                name("nextBatchPtr"),
-                SQLDataType.INTEGER.notNull());
-
-        //Data table's columns
         public static final Field<Integer> PARTITION_COLUMN = field(
                 name("partition"),
                 SQLDataType.INTEGER.notNull());

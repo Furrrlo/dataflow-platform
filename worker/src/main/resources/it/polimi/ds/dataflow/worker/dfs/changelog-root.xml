@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:comment="http://www.w3.org/1999/xhtml"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd"
+        comment:__objectQuotingStrategyComment="
+            Needed for jOOQ generator to work properly, otherwise because of its use of H2 internally, names are messed up
+            See https://github.com/liquibase/liquibase/issues/2385#issuecomment-1061144420
+            See https://github.com/jOOQ/jOOQ/issues/12698"
+        objectQuotingStrategy="QUOTE_ALL_OBJECTS">
+
+    <include file="changelog-1709561540.xml" relativeToChangelogFile="true"/>
+</databaseChangeLog>

@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import static it.polimi.ds.dataflow.coordinator.PostgresWorker.createDataSourceFor;
+import static it.polimi.ds.dataflow.dfs.TestcontainerUtil.createDataSourceFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -115,6 +115,7 @@ class CoordinatorTest {
                     new PostgresWorkerDfs(
                             engineFactory.get(),
                             "coordinator",
+                            UUID.randomUUID(),
                             config -> config.setDataSource(ds))));
         }
         POSTGRES_WORKERS = List.copyOf(POSTGRES_WORKERS);

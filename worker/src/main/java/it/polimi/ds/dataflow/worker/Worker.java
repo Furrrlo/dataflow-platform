@@ -56,8 +56,6 @@ public class Worker implements Closeable {
     public void loop() throws IOException {
         socket.send(new HelloPacket(uuid, dfsNodeName));
 
-        //Creating a new table to store the backup information for fault tolerance
-        dfs.createBackupFile(DEFAULT_BACKUP_TABLE_NAME);
         while (!Thread.interrupted()) {
             var ctx0 = socket.receive(CoordinatorRequestPacket.class);
             ioThreadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
@@ -91,19 +89,18 @@ public class Worker implements Closeable {
         try {
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions());
 
+            // Create the partition in which we are going to put the result
             dfs.createFilePartition(pkt.dfsDstFileName(), pkt.partition(), CreateFileOptions.IF_NOT_EXISTS);
             var dfsDstFile = dfs.findFile(pkt.dfsDstFileName(), pkt.partitions());
 
-            var compiledOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
+            // Initialize backup information
+            dfs.writeBackupInfo(pkt.jobId(), pkt.partition(), null);
 
+            var compiledOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
 
             Integer nextBatchPtr = null;
             while (true) {
                 var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
-
-                //Saving backup information for fault tolerance
-                dfs.updateBackupFile(DEFAULT_BACKUP_TABLE_NAME, new WorkerDfs.BackupInfo(
-                        this.uuid, pkt.jobId(), pkt.partition(), currentBatch.nextBatchPtr()));
 
                 if (currentBatch.data().isEmpty()) {
                     break;
@@ -114,10 +111,17 @@ public class Worker implements Closeable {
                         .submit(() -> CompiledProgram.execute(compiledOps, currentBatchData.stream()).toList())
                         .get();
 
-                if (pkt.reshuffle())
-                    dfs.writeBatch(dfsDstFile, currentBatchRes);
-                else
-                    dfs.writeBatchInPartition(dfsDstFile, pkt.partition(), currentBatchRes);
+                if (pkt.reshuffle()) {
+                    dfs.writeBatchAndBackup(
+                            pkt.jobId(), pkt.partition(),
+                            dfsDstFile,
+                            currentBatchRes, currentBatch.nextBatchPtr());
+                } else {
+                    dfs.writeBatchInPartitionAndBackup(
+                            pkt.jobId(), pkt.partition(),
+                            dfsDstFile, pkt.partition(),
+                            currentBatchRes, currentBatch.nextBatchPtr());
+                }
                 nextBatchPtr = currentBatch.nextBatchPtr();
             }
 

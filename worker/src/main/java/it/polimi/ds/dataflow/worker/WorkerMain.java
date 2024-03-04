@@ -45,7 +45,7 @@ public final class WorkerMain {
                 engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
                 ioThreadPool,
                 cpuThreadPool,
-                new PostgresWorkerDfs(engine, dfsCoordinatorName, config -> {
+                new PostgresWorkerDfs(engine, dfsCoordinatorName, uuid, config -> {
                     PGSimpleDataSource ds = new PGSimpleDataSource();
                     ds.setServerNames(new String[]{"localhost"});
                     ds.setUser("postgres");
