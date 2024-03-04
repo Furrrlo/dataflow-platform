@@ -109,7 +109,7 @@ public class PostgresDfs implements Dfs {
         record TmpTableData(String tablename, String srvname, boolean isLocal) {
         }
 
-        return new DfsFile(name, Stream.concat(
+        return new DfsFile(name, partitions, Stream.concat(
                         // Could use ctx.meta() instead, but it would use a less efficient query
                         ctx.select(PgTables.TABLENAME)
                                 .from(PgTables.PG_TABLES)
