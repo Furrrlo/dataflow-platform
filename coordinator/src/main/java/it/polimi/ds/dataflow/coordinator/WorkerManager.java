@@ -12,7 +12,9 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -23,6 +25,7 @@ public final class WorkerManager implements Closeable {
     private final ExecutorService threadPool;
 
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
 
     public static WorkerManager listen(ExecutorService threadPool, int port) throws IOException {
         WorkerManager mngr = new WorkerManager(threadPool, new ServerSocket(port));
@@ -41,12 +44,29 @@ public final class WorkerManager implements Closeable {
                 CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, socket.accept());
                 try(var ctx = worker.receive(HelloPacket.class)) {
                     var helloPkt = ctx.getPacket();
+
+                    helloPkt.previousJobs().forEach(job -> {
+                        var reconnectListeners = this.reconnectListeners.remove(new ReconnectListenerKey(
+                                helloPkt.uuid(), job.jobId(), job.partition()));
+                        reconnectListeners.forEach(Runnable::run);
+                    });
                     workers.add(new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName()));
                 }
             }
         } catch (IOException e) {
             // TODO: all should die in a sea of flames
         }
+    }
+
+    public void registerReconnectConsumerFor(UUID worker, int jobId, int partition, Runnable runnable) {
+        reconnectListeners.computeIfAbsent(
+                new ReconnectListenerKey(worker, jobId, partition),
+                _ -> ConcurrentHashMap.newKeySet()
+        ).add(runnable);
+    }
+
+    public void unregisterConsumersForJob(int jobId) {
+        reconnectListeners.keySet().removeIf(k -> k.jobId() == jobId);
     }
 
     @Override
@@ -69,5 +89,8 @@ public final class WorkerManager implements Closeable {
         return workers.stream()
                 .filter(w -> equalsIgnoreCase.test(w.getDfsNodeName()))
                 .toList();
+    }
+
+    private record ReconnectListenerKey(UUID uuid, int jobId, int partition) {
     }
 }

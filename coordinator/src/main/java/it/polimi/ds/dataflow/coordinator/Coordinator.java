@@ -1,5 +1,6 @@
 package it.polimi.ds.dataflow.coordinator;
 
+import it.polimi.ds.dataflow.coordinator.JobStructuredTaskScope.PartitionResult;
 import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
 import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
@@ -11,7 +12,6 @@ import it.polimi.ds.dataflow.js.Program;
 import it.polimi.ds.dataflow.socket.packets.*;
 import it.polimi.ds.dataflow.src.Src;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
-import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
 import org.slf4j.Logger;
@@ -19,16 +19,20 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
+import java.io.InterruptedIOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.random.RandomGenerator;
 
 public class Coordinator implements Closeable {
 
     private static final boolean RESHUFFLE_IN_WORKERS = true;
+    private static final int IDLE_WORKER_THRESHOLD = 1;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Coordinator.class);
 
@@ -36,6 +40,7 @@ public class Coordinator implements Closeable {
     private final Parser parser;
     private final CoordinatorDfs dfs;
     private final WorkerManager workerManager;
+    private final AtomicInteger currentJobNumber = new AtomicInteger(RandomGenerator.getDefault().nextInt());
 
     public Coordinator(WorkDirFileLoader fileLoader,
                        Parser parser,
@@ -105,7 +110,11 @@ public class Coordinator implements Closeable {
             LOGGER.info("Executing step {}...", step);
             long startStepTime = System.nanoTime();
 
-            int jobId = 0; // TODO
+            int jobId = currentJobNumber.getAndIncrement();
+            // TODO: since multiple workers can work on the same partition, they cannot use the same dst file
+            //       so we cannot preemptively create them with a standardized name, they need to use their own
+            //       and then tell the coordinator at the end. This also means that reshuffling can't be done in
+            //       workers
             DfsFile dstDfsFile = RESHUFFLE_IN_WORKERS
                     // If workers need to do the reshuffling, we need to be sure all files exist before scheduling 'cause
                     // otherwise one worker might need to write into the partition of another before he has created it
@@ -114,7 +123,7 @@ public class Coordinator implements Closeable {
                     // write into it, and all partitions will be created when we get back to the coordinator to reshuffle
                     : dfs.createPartitionedFile(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum());
 
-            try (var scope = new JobStructuredTaskScope<@Nullable Object>(currDfsFile.partitionsNum())) {
+            try (var scope = new JobStructuredTaskScope<JobSuccessPacket>(currDfsFile.partitionsNum())) {
                 var remainingPartitions = new HashSet<>(currDfsFile.partitions());
                 // Start by the ones that have a close worker
                 currDfsFile.partitions().forEach(partition ->
@@ -123,7 +132,7 @@ public class Coordinator implements Closeable {
                                 .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                                 .ifPresent(worker -> {
                                     remainingPartitions.remove(partition);
-                                    scheduleJobPartition(jobId, scope, worker, currOps, partition, dstDfsFile);
+                                    scope.fork(() -> scheduleJobPartition(jobId, worker, currOps, partition, dstDfsFile));
                                 }));
                 // Rest of them
                 remainingPartitions.forEach(partition -> {
@@ -131,13 +140,15 @@ public class Coordinator implements Closeable {
                             .stream()
                             .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                             .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
-                    scheduleJobPartition(jobId, scope, worker, currOps, partition, dstDfsFile);
+                    scope.fork(() -> scheduleJobPartition(jobId, worker, currOps, partition, dstDfsFile));
                 });
 
                 scope.join().result(IOException::new);
                 LOGGER.info("Executed step {} in {}",
                         step,
                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startStepTime));
+            } finally {
+                workerManager.unregisterConsumersForJob(jobId);
             }
 
             if(!RESHUFFLE_IN_WORKERS && currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
@@ -171,33 +182,92 @@ public class Coordinator implements Closeable {
         return ops;
     }
 
+    private PartitionResult<JobSuccessPacket> scheduleJobPartition(
+            int jobId,
+            WorkerClient initialWorker,
+            List<Op> ops,
+            DfsFilePartitionInfo partition,
+            DfsFile resultingFile
+    ) throws InterruptedException {
+
+        var pkt = new ScheduleJobPacket(jobId,
+                ops,
+                resultingFile.partitionsNum(),
+                partition.fileName(), partition.partition(),
+                resultingFile.name(),
+                RESHUFFLE_IN_WORKERS);
+
+        try(var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobSuccessPacket>>()) {
+            scheduleJobPartitionInScope(scope, pkt, initialWorker, true);
+
+            while(true) {
+                try {
+                    scope.joinUntil(Instant.now().plus(30, ChronoUnit.SECONDS));
+                    break;
+                } catch (TimeoutException e) {
+                    // Timed out
+                }
+
+                // If there's anybody not doing any work, make him work and get the result of whoever finishes first
+                findBestWorkerFor(partition.dfsNodeName(), IDLE_WORKER_THRESHOLD)
+                        .ifPresent(freeWorker ->
+                                scheduleJobPartitionInScope(scope, pkt, freeWorker, false));
+            }
+
+            return scope.result(IllegalStateException::new);
+        }
+    }
+
     @SuppressWarnings("resource")
-    private void scheduleJobPartition(int jobId,
-                                      JobStructuredTaskScope<@Nullable Object> scope,
-                                      WorkerClient worker,
-                                      List<Op> ops,
-                                      DfsFilePartitionInfo partition,
-                                      DfsFile resultingFile) {
+    private void scheduleJobPartitionInScope(
+            StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobSuccessPacket>> scope,
+            ScheduleJobPacket pkt,
+            WorkerClient worker,
+            boolean reschedule
+    ) {
         var unschedule = worker.scheduleJob();
         scope.fork(() -> {
-            var pkt = new ScheduleJobPacket(jobId,
-                    ops,
-                    resultingFile.partitionsNum(),
-                    partition.fileName(), partition.partition(),
-                    resultingFile.name(),
-                    RESHUFFLE_IN_WORKERS);
+            // If it disconnects and reconnects, we want to make it pick it up from where it left off
+            workerManager.registerReconnectConsumerFor(
+                    worker.getUuid(), pkt.jobId(), pkt.partition(),
+                    () -> scheduleJobPartitionInScope(scope, pkt, worker, false));
 
             try(var _ = unschedule;
                 var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
+
                 return switch (ctx.getPacket()) {
-                    case JobSuccessPacket resPkt ->
-                            new JobStructuredTaskScope.PartitionResult<>(partition.partition(), resPkt);
-                    // TODO: do error recovery (?)
-                    case JobFailurePacket resPkt ->
+                    case JobSuccessPacket resPkt -> new PartitionResult<>(pkt.partition(), resPkt);
+                    case JobFailurePacket resPkt -> {
+                        LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, resPkt.ex());
                         throw resPkt.ex();
+                    }
                 };
+            } catch (InterruptedIOException ex) {
+                throw ex; // Interrupted, we are done here
+            } catch (IOException ex) {
+                LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt, ex);
+
+                if(reschedule) {
+                    // Find someone else to do its job instead
+                    var newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE)
+                            .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
+                    scheduleJobPartitionInScope(scope, pkt, newWorker, true);
+                }
+
+                throw ex;
             }
         });
+    }
+
+    private Optional<WorkerClient> findBestWorkerFor(String dfsFileName, int maxJobsThreshold) {
+        return workerManager.getCloseToDfsNode(dfsFileName)
+                .stream()
+                .filter(w -> w.getCurrentScheduledJobs() < maxJobsThreshold)
+                .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
+                .or(() -> workerManager.getWorkers()
+                        .stream()
+                        .filter(w -> w.getCurrentScheduledJobs() < maxJobsThreshold)
+                        .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs)));
     }
 
     private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws Exception {

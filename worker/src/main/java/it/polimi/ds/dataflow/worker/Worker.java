@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import javax.script.ScriptEngine;
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -54,7 +55,8 @@ public class Worker implements Closeable {
     }
 
     public void loop() throws IOException {
-        socket.send(new HelloPacket(uuid, dfsNodeName));
+        // TODO: load previous jobs and send them to the coordinator
+        socket.send(new HelloPacket(uuid, dfsNodeName, List.of()));
 
         while (!Thread.interrupted()) {
             var ctx0 = socket.receive(CoordinatorRequestPacket.class);
@@ -98,6 +100,7 @@ public class Worker implements Closeable {
 
             var compiledOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
 
+            // TODO: try to see if we are restarting a previous job or it's a new one
             Integer nextBatchPtr = null;
             while (true) {
                 var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
