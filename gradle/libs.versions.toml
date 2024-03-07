@@ -8,6 +8,7 @@ testcontainers = "1.19.6"
 errorprone = "2.25.0"
 spotbugs = "4.8.3"
 pmd = "7.0.0-rc4"
+asm = "9.6"
 
 [libraries]
 nashorn = "org.openjdk.nashorn:nashorn-core:15.4"
@@ -50,9 +51,12 @@ plgns-cq-nullaway = "net.ltgt.gradle:gradle-nullaway-plugin:2.0.0"
 plgns-cq-pmd-core = { module = "net.sourceforge.pmd:pmd", version.ref = "pmd" }
 plgns-cq-pmd-ant = { module = "net.sourceforge.pmd:pmd-ant", version.ref = "pmd" }
 plgns-cq-pmd-java = { module = "net.sourceforge.pmd:pmd-java", version.ref = "pmd" }
+plgns-cq-pmd-asm = {group = "org.ow2.asm", name = "asm", version.ref = "asm" }
+plgns-cq-pmd-asm-commons = {group = "org.ow2.asm", name = "asm-commons", version.ref = "asm" }
 
 plgns-db-jooq = { module = "org.jooq:jooq-codegen-gradle", version.ref = "jooq" }
 
 [bundles]
 plgns-cq-pmd = ["plgns-cq-pmd-core", "plgns-cq-pmd-ant", "plgns-cq-pmd-java"]
+plgns-cq-pmd-asm = ["plgns-cq-pmd-asm", "plgns-cq-pmd-asm-commons"]
 testcontainers = [ "testcontainers-core", "testcontainers-junit", "testcontainers-junit4-mock", "testcontainers-postgres" ]

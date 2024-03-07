@@ -2,6 +2,7 @@ import com.github.spotbugs.snom.Confidence
 import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsTask
 import groovy.json.JsonSlurper
+import it.polimi.ds.gradle.PmdPreviewArtifactTransform
 import net.ltgt.gradle.errorprone.errorprone
 import net.ltgt.gradle.nullaway.nullaway
 import org.gradle.accessors.dm.LibrariesForLibs
@@ -23,6 +24,22 @@ val errorpronePatternsFile = file("${rootDir}/config/errorprone/patterns.json")
 val skipErrorprone = project.ext.has("skipErrorprone")
 val pmdEnabled = project.ext.has("pmd")
 val spotBugsEnabled = project.ext.has("spotbugs")
+
+// Register PMD transformer stuff
+val artifactType = Attribute.of("artifactType", String::class.java)
+val pmdPreviewAttr = Attribute.of("pmdPreview", Boolean::class.javaObjectType)
+dependencies {
+    attributesSchema {
+        attribute(pmdPreviewAttr)
+    }
+    artifactTypes.getByName("jar") {
+        attributes.attribute(pmdPreviewAttr, false)
+    }
+    registerTransform(PmdPreviewArtifactTransform::class) {
+        from.attribute(pmdPreviewAttr, false).attribute(artifactType, "jar")
+        to.attribute(pmdPreviewAttr, true).attribute(artifactType, "jar")
+    }
+}
 
 // https://github.com/gradle/gradle/issues/15383
 val libs = the<LibrariesForLibs>()
@@ -61,6 +78,8 @@ pmd {
     toolVersion = libs.versions.pmd.get()
     if(pmdRuleSetsFile.exists()) ruleSetConfig = resources.text.fromFile(pmdRuleSetsFile)
 }
+// Enable PMD preview features
+configurations.pmd { attributes.attribute(pmdPreviewAttr, true) }
 
 tasks.withType<JavaCompile> {
     options.compilerArgs.addAll(listOf("-Xmaxerrs", "2000", "-Xmaxwarns", "2000"))

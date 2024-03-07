@@ -10,9 +10,12 @@ repositories {
 }
 
 dependencies {
+    implementation(gradleApi())
+
     implementation(libs.plgns.cq.spotbugs)
     implementation(libs.plgns.cq.errorprone)
     implementation(libs.plgns.cq.nullaway)
+    implementation(libs.bundles.plgns.cq.pmd.asm)
 
     implementation(libs.plgns.db.jooq) {
         attributes {
