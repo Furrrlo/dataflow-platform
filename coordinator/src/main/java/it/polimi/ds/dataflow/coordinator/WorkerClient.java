@@ -4,8 +4,9 @@ import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
 import it.polimi.ds.dataflow.utils.ExceptionlessAutoCloseable;
 
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class WorkerClient {
 
@@ -13,7 +14,7 @@ public final class WorkerClient {
     private final UUID uuid;
     private final String dfsNodeName;
 
-    private final AtomicInteger currentScheduledJobs = new AtomicInteger();
+    private final Set<ScheduledJob> currentScheduledJobs = ConcurrentHashMap.newKeySet();
 
     public WorkerClient(CoordinatorSocketManager socket, UUID uuid, String dfsNodeName) {
         this.socket = socket;
@@ -33,13 +34,17 @@ public final class WorkerClient {
         return dfsNodeName;
     }
 
-    public ExceptionlessAutoCloseable scheduleJob() {
-        currentScheduledJobs.incrementAndGet();
-        return currentScheduledJobs::decrementAndGet;
+    public ExceptionlessAutoCloseable scheduleJob(int jobId, int partition) {
+        var job = new ScheduledJob(jobId, partition);
+        boolean alreadyScheduled = !currentScheduledJobs.add(job);
+        if(alreadyScheduled)
+            throw new IllegalStateException("Job " + jobId + " for partition " + partition +
+                    " was already scheduled on node " + uuid);
+        return () -> currentScheduledJobs.remove(job);
     }
 
     public int getCurrentScheduledJobs() {
-        return currentScheduledJobs.get();
+        return currentScheduledJobs.size();
     }
 
     @Override
@@ -61,7 +66,10 @@ public final class WorkerClient {
         return "Worker{" +
                 "socket=" + socket +
                 ", dfsNodeName='" + dfsNodeName + '\'' +
-                ", currentScheduledJobs='" + currentScheduledJobs.get() + '\'' +
+                ", currentScheduledJobs='" + currentScheduledJobs + '\'' +
                 '}';
+    }
+
+    private record ScheduledJob(int jobId, int partition) {
     }
 }

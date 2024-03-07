@@ -10,12 +10,11 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -26,6 +25,7 @@ public final class WorkerManager implements Closeable {
 
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
+    private final Set<CompletableFuture<WorkerClient>> reconnectionFutures = ConcurrentHashMap.newKeySet();
 
     public static WorkerManager listen(ExecutorService threadPool, int port) throws IOException {
         WorkerManager mngr = new WorkerManager(threadPool, new ServerSocket(port));
@@ -45,12 +45,26 @@ public final class WorkerManager implements Closeable {
                 try(var ctx = worker.receive(HelloPacket.class)) {
                     var helloPkt = ctx.getPacket();
 
+                    var workerClient = new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName());
+                    worker.setOnClose(cls -> {
+                        try {
+                            cls.close();
+                        } finally {
+                            workers.remove(workerClient);
+                        }
+                    });
+
+                    var reconnectionFutures = new HashSet<>(this.reconnectionFutures);
+                    reconnectionFutures.forEach(f -> f.complete(workerClient));
+                    this.reconnectionFutures.removeAll(reconnectionFutures);
+
                     helloPkt.previousJobs().forEach(job -> {
                         var reconnectListeners = this.reconnectListeners.remove(new ReconnectListenerKey(
                                 helloPkt.uuid(), job.jobId(), job.partition()));
                         reconnectListeners.forEach(Runnable::run);
                     });
-                    workers.add(new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName()));
+
+                    workers.add(workerClient);
                 }
             }
         } catch (IOException e) {
@@ -65,8 +79,18 @@ public final class WorkerManager implements Closeable {
         ).add(runnable);
     }
 
+    public Future<WorkerClient> waitForAnyReconnections() {
+        var future = new CompletableFuture<WorkerClient>();
+        reconnectionFutures.add(future);
+        return future;
+    }
+
     public void unregisterConsumersForJob(int jobId) {
         reconnectListeners.keySet().removeIf(k -> k.jobId() == jobId);
+    }
+
+    public void unregisterConsumersForJob(int jobId, int partition) {
+        reconnectListeners.keySet().removeIf(k -> k.jobId() == jobId && k.partition() == partition);
     }
 
     @Override

@@ -23,6 +23,7 @@ import java.io.InterruptedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -33,6 +34,8 @@ public class Coordinator implements Closeable {
 
     private static final boolean RESHUFFLE_IN_WORKERS = true;
     private static final int IDLE_WORKER_THRESHOLD = 1;
+    private static final long STRAGGLERS_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(30);
+    private static final long NO_NODES_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(30);
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Coordinator.class);
 
@@ -202,7 +205,7 @@ public class Coordinator implements Closeable {
 
             while(true) {
                 try {
-                    scope.joinUntil(Instant.now().plus(30, ChronoUnit.SECONDS));
+                    scope.joinUntil(Instant.now().plus(STRAGGLERS_TIMEOUT_MILLIS, ChronoUnit.MILLIS));
                     break;
                 } catch (TimeoutException e) {
                     // Timed out
@@ -217,6 +220,8 @@ public class Coordinator implements Closeable {
             return Objects.requireNonNull(
                     scope.result(IllegalStateException::new),
                     "Scope result for partition " + partition + " is null");
+        } finally {
+            workerManager.unregisterConsumersForJob(jobId, partition.partition());
         }
     }
 
@@ -227,7 +232,7 @@ public class Coordinator implements Closeable {
             WorkerClient worker,
             boolean reschedule
     ) {
-        var unschedule = worker.scheduleJob();
+        var unschedule = worker.scheduleJob(pkt.jobId(), pkt.partition());
         scope.fork(() -> {
             // If it disconnects and reconnects, we want to make it pick it up from where it left off
             workerManager.registerReconnectConsumerFor(
@@ -251,8 +256,32 @@ public class Coordinator implements Closeable {
 
                 if(reschedule) {
                     // Find someone else to do its job instead
-                    var newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE)
-                            .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
+                    var maybeNewWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE);
+                    WorkerClient newWorker;
+                    if(maybeNewWorker.isPresent()) {
+                        newWorker = maybeNewWorker.get();
+                    } else {
+                        try {
+                            newWorker = workerManager.waitForAnyReconnections()
+                                    .get(NO_NODES_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                        } catch (InterruptedException innerEx) {
+                            innerEx.addSuppressed(ex);
+                            throw innerEx;
+                        } catch (ExecutionException innerEx) {
+                            ex.addSuppressed(innerEx);
+                            throw ex;
+                        } catch (TimeoutException innerEx) {
+                            // Try one last time, in case we missed a new connection between the previous
+                            // findBestWorkerFor call and the waitForAnyReconnections call
+                            newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE).orElseThrow(() -> {
+                                ex.addSuppressed(new IOException("No nodes connected for more than "
+                                        + TimeUnit.MILLISECONDS.toSeconds(NO_NODES_TIMEOUT_MILLIS) + "s",
+                                        innerEx));
+                                return ex;
+                            });
+                        }
+                    }
+
                     scheduleJobPartitionInScope(scope, pkt, newWorker, true);
                 }
 
