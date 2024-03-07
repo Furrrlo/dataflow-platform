@@ -214,7 +214,9 @@ public class Coordinator implements Closeable {
                                 scheduleJobPartitionInScope(scope, pkt, freeWorker, false));
             }
 
-            return scope.result(IllegalStateException::new);
+            return Objects.requireNonNull(
+                    scope.result(IllegalStateException::new),
+                    "Scope result for partition " + partition + " is null");
         }
     }
 
