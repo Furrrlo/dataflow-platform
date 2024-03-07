@@ -8,7 +8,6 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.Record;
 import org.jooq.*;
-import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
 
@@ -17,7 +16,10 @@ import javax.script.ScriptException;
 import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -45,7 +47,7 @@ public class PostgresDfs implements Dfs {
         configurator.accept(config);
         this.dataSource = new HikariDataSource(config);
 
-        this.ctx = DSL.using(dataSource, SQLDialect.POSTGRES);
+        this.ctx = using(dataSource, SQLDialect.POSTGRES);
     }
 
     @Override
@@ -63,9 +65,7 @@ public class PostgresDfs implements Dfs {
         if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
 
-        DfsFileTable
-                .createPartitionTable(ctx, file, partition, failIfExists ? 0 : IF_NOT_EXISTS)
-                .execute();
+        createPartitionTable(ctx, file, partition, failIfExists ? 0 : IF_NOT_EXISTS).execute();
     }
 
     @Override
@@ -105,7 +105,7 @@ public class PostgresDfs implements Dfs {
                         partition = Integer.parseInt(currRelName
                                 .substring(name.length() + "_".length()));
                     } catch (NumberFormatException ex) {
-                        throw new AssertionError(STR."Unexpectedly failed to parse integer for \{currRelName}");
+                        throw new AssertionError(STR."Unexpectedly failed to parse integer for \{currRelName}", ex);
                     }
 
                     return new DfsFilePartitionInfo(name, partition, r.srvname, r.isLocal);
@@ -257,7 +257,7 @@ public class PostgresDfs implements Dfs {
                                                  int partition,
                                                  @MagicConstant(flags = {IF_NOT_EXISTS}) int flags) {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
-            var table = DfsFileTable.partitionTableFor(fileName, partition);
+            var table = partitionTableFor(fileName, partition);
             var createTable = ifNotExists
                     ? ctx.createTableIfNotExists(table)
                     : ctx.createTable(table);
@@ -277,7 +277,7 @@ public class PostgresDfs implements Dfs {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
             boolean foreign = (flags & FOREIGN) != 0;
 
-            var table = DfsFileTable.coordinatorTableFor(fileName);
+            var table = coordinatorTableFor(fileName);
             var createTable = ifNotExists
                     ? ctx.createTableIfNotExists(table)
                     : ctx.createTable(table);
@@ -328,9 +328,6 @@ public class PostgresDfs implements Dfs {
         public static final Field<String> TABLENAME = field(
                 PG_TABLES.getQualifiedName().append("tablename"), SQLDataType.VARCHAR);
         public static final Field<Object> SCHEMANAME = field(PG_TABLES.getQualifiedName().append("schemaname"));
-
-        private PgTables() {
-        }
     }
 
     private static final class PgForeignTable {
@@ -339,9 +336,6 @@ public class PostgresDfs implements Dfs {
 
         public static final Field<Object> FTSERVER = field(PG_FOREIGN_TABLE.getQualifiedName().append("ftserver"));
         public static final Field<Object> FTRELID = field(PG_FOREIGN_TABLE.getQualifiedName().append("ftrelid"));
-
-        private PgForeignTable() {
-        }
     }
 
     private static final class PgClass {
@@ -351,9 +345,6 @@ public class PostgresDfs implements Dfs {
         public static final Field<Object> OID = field(PG_CLASS.getQualifiedName().append("oid"));
         public static final Field<String> RELNAME =
                 field(PG_CLASS.getQualifiedName().append("relname"), SQLDataType.VARCHAR);
-
-        private PgClass() {
-        }
     }
 
     private static final class PgForeignServer {
@@ -362,8 +353,5 @@ public class PostgresDfs implements Dfs {
         public static final Field<Object> OID = field(PG_FOREIGN_SERVER.getQualifiedName().append("oid"));
         public static final Field<String> SRVNAME =
                 field(PG_FOREIGN_SERVER.getQualifiedName().append("srvname"), SQLDataType.VARCHAR);
-
-        private PgForeignServer() {
-        }
     }
 }

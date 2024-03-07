@@ -51,12 +51,21 @@
             <property name="allowEmptyLoop" value="true" />
         </properties>
     </rule>
+    <rule ref="category/java/codestyle.xml/FormalParameterNamingConventions">
+        <properties>
+            <!-- Allow _ as lambda param name to ignore parameters -->
+            <property name="lambdaParameterPattern" value="_|[a-z][a-zA-Z0-9]*" />
+            <property name="explicitLambdaParameterPattern" value="_|[a-z][a-zA-Z0-9]*" />
+        </properties>
+    </rule>
+
 
     <rule ref="category/java/design.xml">
         <exclude name="GodClass"/>
         <exclude name="DataClass"/>
         <exclude name="NcssCount"/>
         <exclude name="LawOfDemeter"/>
+        <exclude name="SwitchDensity"/>
         <exclude name="TooManyFields"/>
         <exclude name="TooManyMethods"/>
         <exclude name="NPathComplexity"/>

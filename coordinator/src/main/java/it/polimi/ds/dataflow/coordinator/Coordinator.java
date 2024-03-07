@@ -64,7 +64,7 @@ public class Coordinator implements Closeable {
         }
     }
 
-    public DfsFile compileAndExecuteProgram(String programFileName, String src) throws Exception {
+    public DfsFile compileAndExecuteProgram(String programFileName, String src) throws IOException, InterruptedException {
         LOGGER.info("Compiling program {}...", programFileName);
         long startNanos = System.nanoTime();
 
@@ -78,7 +78,7 @@ public class Coordinator implements Closeable {
         return executeProgram(programFileName, ProgramNashornTreeVisitor.parse(src, cut, fileLoader, dfs));
     }
 
-    public DfsFile executeProgram(String programFileName, Program program) throws Exception {
+    public DfsFile executeProgram(String programFileName, Program program) throws IOException, InterruptedException {
 
         if (program.src() instanceof NonPartitionedCoordinatorSrc nonPartitionedSrc) {
             LOGGER.info("Partitioning program {} source...", programFileName);
@@ -244,9 +244,9 @@ public class Coordinator implements Closeable {
 
                 return switch (ctx.getPacket()) {
                     case JobSuccessPacket resPkt -> new PartitionResult<>(pkt.partition(), resPkt);
-                    case JobFailurePacket resPkt -> {
-                        LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, resPkt.ex());
-                        throw resPkt.ex();
+                    case JobFailurePacket (Exception ex) -> {
+                        LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new Exception(ex));
+                        throw new Exception(ex);
                     }
                 };
             } catch (InterruptedIOException ex) {
@@ -264,19 +264,17 @@ public class Coordinator implements Closeable {
                         try {
                             newWorker = workerManager.waitForAnyReconnections()
                                     .get(NO_NODES_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-                        } catch (InterruptedException innerEx) {
+                        } catch (InterruptedException | ExecutionException innerEx) {
                             innerEx.addSuppressed(ex);
                             throw innerEx;
-                        } catch (ExecutionException innerEx) {
-                            ex.addSuppressed(innerEx);
-                            throw ex;
                         } catch (TimeoutException innerEx) {
                             // Try one last time, in case we missed a new connection between the previous
                             // findBestWorkerFor call and the waitForAnyReconnections call
                             newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE).orElseThrow(() -> {
-                                ex.addSuppressed(new IOException("No nodes connected for more than "
+                                var newEx = new IOException("No nodes connected for more than "
                                         + TimeUnit.MILLISECONDS.toSeconds(NO_NODES_TIMEOUT_MILLIS) + "s",
-                                        innerEx));
+                                        innerEx);
+                                newEx.addSuppressed(ex);
                                 return ex;
                             });
                         }
@@ -301,7 +299,7 @@ public class Coordinator implements Closeable {
                         .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs)));
     }
 
-    private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws Exception {
+    private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws IOException, InterruptedException {
         var dfsFile = partitionFile(dfsName, partitionsNum);
         try(var tuples = src.loadAll()) {
             dfs.writeBatch(dfsFile, tuples.toList());
@@ -309,7 +307,7 @@ public class Coordinator implements Closeable {
         return new DfsSrc(dfs, dfsFile);
     }
 
-    private DfsFile partitionFile(String dfsName, int partitionsNum) throws Exception {
+    private DfsFile partitionFile(String dfsName, int partitionsNum) throws InterruptedException, IOException {
         var dfsFile = dfs.createPartitionedFile(dfsName, partitionsNum);
 
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {

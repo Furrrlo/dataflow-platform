@@ -9,11 +9,10 @@ public record HelloPacket(UUID uuid,
                           String dfsNodeName,
                           SequencedCollection<PreviousJob> previousJobs) implements C2SPacket {
 
-    @SuppressWarnings({
-            "PMD.UnusedAssignment" // False positive, see https://github.com/pmd/pmd/issues/4603
-    })
-    public HelloPacket {
-        previousJobs = List.copyOf(previousJobs);
+    public HelloPacket(UUID uuid, String dfsNodeName, SequencedCollection<PreviousJob> previousJobs) {
+        this.uuid = uuid;
+        this.dfsNodeName = dfsNodeName;
+        this.previousJobs = List.copyOf(previousJobs);
     }
 
     public record PreviousJob(int jobId, int partition) implements Serializable {
