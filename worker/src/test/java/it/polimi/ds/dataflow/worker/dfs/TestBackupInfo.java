@@ -3,12 +3,12 @@ package it.polimi.ds.dataflow.worker.dfs;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.DSLContext;
 
-import java.util.UUID;
+import java.util.SequencedCollection;
 import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.worker.dfs.Tables.DATAFLOW_JOBS;
 
-public record TestBackupInfo(UUID uuid, int jobId, int partition, @Nullable Integer nextBatchPtr) {
+public record TestBackupInfo(int jobId, int partition, @Nullable Integer nextBatchPtr) {
 
     public static void truncate(DSLContext ctx) {
         ctx.truncate(DATAFLOW_JOBS).execute();
@@ -19,7 +19,6 @@ public record TestBackupInfo(UUID uuid, int jobId, int partition, @Nullable Inte
                 .from(DATAFLOW_JOBS)
                 .stream()
                 .map(r -> new TestBackupInfo(
-                        r.get(DATAFLOW_JOBS.WORKER),
                         r.get(DATAFLOW_JOBS.JOBID),
                         r.get(DATAFLOW_JOBS.PARTITION),
                         r.get(DATAFLOW_JOBS.NEXTBATCHPTR)

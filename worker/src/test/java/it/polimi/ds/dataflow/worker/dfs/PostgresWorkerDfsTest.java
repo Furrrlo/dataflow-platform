@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.dfs.TestcontainerUtil.createDataSourceFor;
+import static it.polimi.ds.dataflow.socket.packets.HelloPacket.PreviousJob;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -86,12 +87,12 @@ class PostgresWorkerDfsTest {
         }).toList();
 
         var infoToRead = new ArrayList<TestBackupInfo>();
-        try(var _ = Closeables.compose(dfses)) {
+        try (var _ = Closeables.compose(dfses)) {
             var infoToWrite = List.of(
-                    new TestBackupInfo(uuids.get(0), 1, 1, 1),
-                    new TestBackupInfo(uuids.get(1), 2, 2, 2),
-                    new TestBackupInfo(uuids.get(2), 3, 3, 3),
-                    new TestBackupInfo(uuids.get(3), 4, 4, 4));
+                    new TestBackupInfo(1, 1, 1),
+                    new TestBackupInfo(2, 2, 2),
+                    new TestBackupInfo(3, 3, 3),
+                    new TestBackupInfo(4, 4, 4));
 
             // Write a bunch of rows to be modified in the backup table
             for (int i = 0; i < infoToWrite.size(); i++) {
@@ -112,7 +113,9 @@ class PostgresWorkerDfsTest {
         }
 
         // Declaring comparator to reorder BackupInfos according to their UUID's conversion to string
-        var infoComparator = Comparator.<TestBackupInfo, String>comparing(i -> i.uuid().toString());
+        var infoComparator = Comparator.comparingInt(TestBackupInfo::jobId)
+                .thenComparing(TestBackupInfo::partition)
+                .thenComparing(TestBackupInfo::nextBatchPtr);
         try (var conn = createDataSourceFor(WORKER_NODE).getConnection()) {
             DSLContext ctx = DSL.using(conn);
             assertEquals(
