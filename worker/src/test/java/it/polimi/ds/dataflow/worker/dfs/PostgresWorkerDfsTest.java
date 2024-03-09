@@ -89,10 +89,10 @@ class PostgresWorkerDfsTest {
         var infoToRead = new ArrayList<TestBackupInfo>();
         try (var _ = Closeables.compose(dfses)) {
             var infoToWrite = List.of(
-                    new TestBackupInfo(1, 1, 1),
-                    new TestBackupInfo(2, 2, 2),
-                    new TestBackupInfo(3, 3, 3),
-                    new TestBackupInfo(4, 4, 4));
+                    new TestBackupInfo(uuids.get(0),1, 1, 1),
+                    new TestBackupInfo(uuids.get(1),2, 2, 2),
+                    new TestBackupInfo(uuids.get(2),3, 3, 3),
+                    new TestBackupInfo(uuids.get(3),4, 4, 4));
 
             // Write a bunch of rows to be modified in the backup table
             for (int i = 0; i < infoToWrite.size(); i++) {
@@ -112,8 +112,10 @@ class PostgresWorkerDfsTest {
             }
         }
 
-        // Declaring comparator to reorder BackupInfos according to their UUID's conversion to string
-        var infoComparator = Comparator.comparingInt(TestBackupInfo::jobId)
+        // Declaring comparator to reorder BackupInfos in order to compare them.
+        // (Added more comparator just for extreme safety, they shouldn't be needed)
+        var infoComparator = Comparator.comparing(TestBackupInfo::uuid)
+                .thenComparing(TestBackupInfo::jobId)
                 .thenComparing(TestBackupInfo::partition)
                 .thenComparing(TestBackupInfo::nextBatchPtr);
         try (var conn = createDataSourceFor(WORKER_NODE).getConnection()) {
@@ -141,13 +143,14 @@ class PostgresWorkerDfsTest {
 
     @Test
     void readWorkerPreviousJobs() {
+        UUID uuid = UUID.randomUUID();
         var infoToWrite = List.of(
-                new TestBackupInfo(1, 1, 1),
-                new TestBackupInfo(1, 2, null),
-                new TestBackupInfo(2, 3, 10),
-                new TestBackupInfo(2, 7, 20),
-                new TestBackupInfo(3, 7, 30),
-                new TestBackupInfo(3, 1, 40)
+                new TestBackupInfo(uuid,1, 1, 1),
+                new TestBackupInfo(uuid,1, 2, null),
+                new TestBackupInfo(uuid,2, 3, 10),
+                new TestBackupInfo(uuid,2, 7, 20),
+                new TestBackupInfo(uuid,3, 7, 30),
+                new TestBackupInfo(uuid,3, 1, 40)
         );
         var infoToRead = infoToWrite.stream().map(info -> new PreviousJob(info.jobId(), info.partition())).toList();
         TestBackupInfo.writeMultipleBackupInfos(DFS, infoToWrite);

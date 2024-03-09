@@ -57,6 +57,7 @@ public final class CoordinatorMain {
         }
     }
 
+    @SuppressFBWarnings("IMPROPER_UNICODE")
     private static void inputLoop(
             WorkDirFileLoader fileLoader,
             Scanner in,
