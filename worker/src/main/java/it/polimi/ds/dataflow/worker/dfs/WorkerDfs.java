@@ -6,6 +6,9 @@ import it.polimi.ds.dataflow.dfs.DfsFile;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.SequencedCollection;
+
+import static it.polimi.ds.dataflow.socket.packets.HelloPacket.PreviousJob;
 
 public interface WorkerDfs extends Dfs {
 
@@ -23,6 +26,8 @@ public interface WorkerDfs extends Dfs {
                                         int dstPartition,
                                         Collection<Tuple2> tuple,
                                         @Nullable Integer nextBatchPtr);
+
+    SequencedCollection<PreviousJob> readWorkerJobs();
 
     void deleteBackup(int jobId, int partition);
 }

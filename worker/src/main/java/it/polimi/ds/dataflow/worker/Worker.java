@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import javax.script.ScriptEngine;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
@@ -55,8 +54,7 @@ public class Worker implements Closeable {
     }
 
     public void loop() throws IOException {
-        // TODO: load previous jobs and send them to the coordinator
-        socket.send(new HelloPacket(uuid, dfsNodeName, List.of()));
+        socket.send(new HelloPacket(uuid, dfsNodeName, dfs.readWorkerJobs()));
 
         while (!Thread.interrupted()) {
             var ctx0 = socket.receive(CoordinatorRequestPacket.class);
@@ -91,7 +89,7 @@ public class Worker implements Closeable {
         try {
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions());
 
-            // Create the partition in which we are going to put the result
+            // Create the partition in which we are going to put the results
             dfs.createFilePartition(pkt.dfsDstFileName(), pkt.partition(), CreateFileOptions.IF_NOT_EXISTS);
             var dfsDstFile = dfs.findFile(pkt.dfsDstFileName(), pkt.partitions());
 

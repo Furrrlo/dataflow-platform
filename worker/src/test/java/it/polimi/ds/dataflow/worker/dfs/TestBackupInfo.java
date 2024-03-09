@@ -24,4 +24,12 @@ public record TestBackupInfo(int jobId, int partition, @Nullable Integer nextBat
                         r.get(DATAFLOW_JOBS.NEXTBATCHPTR)
                 ));
     }
+
+    public static void writeMultipleBackupInfos(WorkerDfs dfs, SequencedCollection<TestBackupInfo> backups) {
+        backups.forEach(
+                b -> dfs.writeBackupInfo(
+                        b.jobId,
+                        b.partition,
+                        b.nextBatchPtr));
+    }
 }

@@ -138,4 +138,28 @@ class PostgresWorkerDfsTest {
                     TestBackupInfo.loadAllFrom(ctx).toList());
         }
     }
+
+    @Test
+    void readWorkerPreviousJobs() {
+        var infoToWrite = List.of(
+                new TestBackupInfo(1, 1, 1),
+                new TestBackupInfo(1, 2, null),
+                new TestBackupInfo(2, 3, 10),
+                new TestBackupInfo(2, 7, 20),
+                new TestBackupInfo(3, 7, 30),
+                new TestBackupInfo(3, 1, 40)
+        );
+        var infoToRead = infoToWrite.stream().map(info -> new PreviousJob(info.jobId(), info.partition())).toList();
+        TestBackupInfo.writeMultipleBackupInfos(DFS, infoToWrite);
+
+        var previousJobsComparator = Comparator.comparingInt(PreviousJob::jobId)
+                .thenComparing(PreviousJob::partition);
+
+        var previousJobs = DFS.readWorkerJobs();
+
+        assertEquals(
+                infoToRead.stream().sorted(previousJobsComparator).toList(),
+                previousJobs.stream().sorted(previousJobsComparator).toList());
+
+    }
 }

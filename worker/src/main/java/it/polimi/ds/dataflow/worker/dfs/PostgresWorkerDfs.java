@@ -20,11 +20,13 @@ import org.jspecify.annotations.Nullable;
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.util.Collection;
+import java.util.SequencedCollection;
 import java.util.UUID;
 import java.util.function.Consumer;
 
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.FOREIGN;
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.IF_NOT_EXISTS;
+import static it.polimi.ds.dataflow.socket.packets.HelloPacket.PreviousJob;
 import static it.polimi.ds.dataflow.worker.dfs.Tables.DATAFLOW_JOBS;
 import static org.jooq.impl.DSL.field;
 
@@ -137,6 +139,18 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
             doWriteBatchInPartition(tx.dsl(), dstFile, dstPartition, tuple);
             doWriteBackupInfo(tx.dsl(), jobId, srcPartition, nextBatchPtr);
         });
+    }
+
+    @Override
+    public SequencedCollection<PreviousJob> readWorkerJobs() {
+        return ctx.select(DATAFLOW_JOBS.JOBID, DATAFLOW_JOBS.PARTITION)
+                .from(DATAFLOW_JOBS)
+                .where(DATAFLOW_JOBS.WORKER.eq(uuid))
+                .stream()
+                .map(r -> new PreviousJob(
+                        r.get(DATAFLOW_JOBS.JOBID),
+                        r.get(DATAFLOW_JOBS.PARTITION)))
+                .toList();
     }
 
     //TODO: Verify if it's needed
