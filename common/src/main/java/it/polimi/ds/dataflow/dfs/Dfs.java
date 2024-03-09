@@ -13,6 +13,8 @@ public interface Dfs extends Closeable {
 
     DfsFile findFile(String name, int partitions);
 
+    void deleteFile(String name);
+
     void write(DfsFile file, Tuple2 tuple);
 
     void writeInPartition(DfsFile file, Tuple2 tuple, int partition);

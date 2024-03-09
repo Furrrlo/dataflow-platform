@@ -40,9 +40,9 @@ public final class WorkerManager implements Closeable {
 
     private void execute() {
         try {
-            while(!Thread.interrupted()) {
+            while (!Thread.interrupted()) {
                 CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, socket.accept());
-                try(var ctx = worker.receive(HelloPacket.class)) {
+                try (var ctx = worker.receive(HelloPacket.class)) {
                     var helloPkt = ctx.getPacket();
 
                     var workerClient = new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName());

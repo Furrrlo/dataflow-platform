@@ -354,4 +354,8 @@ public class PostgresDfs implements Dfs {
         public static final Field<String> SRVNAME =
                 field(PG_FOREIGN_SERVER.getQualifiedName().append("srvname"), SQLDataType.VARCHAR);
     }
+    @Override
+    public void deleteFile(String name) {
+        ctx.dropTable(name).execute();
+    }
 }

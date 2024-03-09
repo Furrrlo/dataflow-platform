@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
 
@@ -72,6 +73,27 @@ public final class CoordinatorMain {
                 continue;
             }
 
+            //Possible alternative to this are:
+            //  1) Create new job's table only if it doesn't exist already one with the same name.
+            //     The problem is that we don't have a discriminant to decide whether keeping the old results or computing the newer ones
+            //  2) Instead of dropping the job's table, deleting all rows in it for whatever reason.
+            //  3) Allows the user to insert only different job's names without the possibility to use the older ones.
+            //     In this case the problem would be the explosion of the DB content, which could be solvable by starting
+            //     a "garbage collector" entity that every few seconds/minutes/... the oldest tables. (but this would increase
+            //     the overall complexity)
+            if (coordinator.ifJobAlreadyDone(programFileName)) {
+                String response;
+                do {
+                    System.out.println("Job \"" + programFileName + "\" or another one with the same name already executed.\n" +
+                            "Do you want to replace its results?(Y/N)");
+                    response = in.nextLine().toLowerCase(Locale.getDefault());
+                } while (!response.equals("n") && !response.equals("y"));
+                if (response.equals("n"))
+                    continue;
+                else
+                    coordinator.deletePreviousJob(programFileName);
+            }
+
             String src;
             try (InputStream is = fileLoader.loadResourceAsStream(programFileName)) {
                 src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
@@ -81,7 +103,15 @@ public final class CoordinatorMain {
                 coordinator.compileAndExecuteProgram(programFileName, src);
             } catch (InterruptedException | InterruptedIOException ex) {
                 throw ex;
+            } catch (ArithmeticException e) {
+                logger.error("No active workers connected, couldn't proceed with job \"{}\" execution", programFileName, e);
             } catch (Throwable t) {
+                //Raised if an identical job (with the same name) has been already submitted
+                //For instance, if word-count example is submitted two times, the second time
+                //the execution will raise a DataAccessException due to the fact that the table
+                //"word-count" already exists.
+                //This exception is also raised when we start the coordinator, we give it a job but
+                //there are 0 active workers (raise an ArithmeticException: Division by 0)
                 logger.error("Unrecoverable failure while executing job {}", programFileName, t);
             }
         }

@@ -58,8 +58,8 @@ public class Coordinator implements Closeable {
     @Override
     @SuppressWarnings("EmptyTryBlock")
     public void close() throws IOException {
-        try(var _ = dfs;
-            var _ = workerManager) {
+        try (var _ = dfs;
+             var _ = workerManager) {
             // I just want to close all of them
         }
     }
@@ -96,7 +96,7 @@ public class Coordinator implements Closeable {
                     TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
         }
 
-        if(!(program.src() instanceof DfsSrc dfsSrc))
+        if (!(program.src() instanceof DfsSrc dfsSrc))
             throw new IllegalStateException("Only DfsSrc can be scheduled, but there's still " + program.src());
 
         LOGGER.info("Executing program {}...", programFileName);
@@ -106,7 +106,7 @@ public class Coordinator implements Closeable {
 
         var currDfsFile = dfsSrc.getDfsFile();
         var remainingOps = new ArrayList<>(program.ops());
-        for(int step = 0; !remainingOps.isEmpty(); step++) {
+        for (int step = 0; !remainingOps.isEmpty(); step++) {
             var currOps = nextOpsBatch(remainingOps);
             currOps.forEach(_ -> remainingOps.removeFirst());
 
@@ -154,7 +154,7 @@ public class Coordinator implements Closeable {
                 workerManager.unregisterConsumersForJob(jobId);
             }
 
-            if(!RESHUFFLE_IN_WORKERS && currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
+            if (!RESHUFFLE_IN_WORKERS && currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
                 LOGGER.info("Reshuffling");
                 long startShuffleTime = System.nanoTime();
                 dfs.reshuffle(dstDfsFile);
@@ -174,8 +174,8 @@ public class Coordinator implements Closeable {
         var ops = new ArrayList<Op>();
 
         boolean wasShuffled = false;
-        for(Op op : remainingOps) {
-            if(wasShuffled && op.kind().isRequiresShuffling())
+        for (Op op : remainingOps) {
+            if (wasShuffled && op.kind().isRequiresShuffling())
                 return ops;
 
             ops.add(op);
@@ -200,10 +200,10 @@ public class Coordinator implements Closeable {
                 resultingFile.name(),
                 RESHUFFLE_IN_WORKERS);
 
-        try(var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobSuccessPacket>>()) {
+        try (var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobSuccessPacket>>()) {
             scheduleJobPartitionInScope(scope, pkt, initialWorker, true);
 
-            while(true) {
+            while (true) {
                 try {
                     scope.joinUntil(Instant.now().plus(STRAGGLERS_TIMEOUT_MILLIS, ChronoUnit.MILLIS));
                     break;
@@ -239,12 +239,12 @@ public class Coordinator implements Closeable {
                     worker.getUuid(), pkt.jobId(), pkt.partition(),
                     () -> scheduleJobPartitionInScope(scope, pkt, worker, false));
 
-            try(var _ = unschedule;
-                var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
+            try (var _ = unschedule;
+                 var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
 
                 return switch (ctx.getPacket()) {
                     case JobSuccessPacket resPkt -> new PartitionResult<>(pkt.partition(), resPkt);
-                    case JobFailurePacket (Exception ex) -> {
+                    case JobFailurePacket(Exception ex) -> {
                         LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new Exception(ex));
                         throw new Exception(ex);
                     }
@@ -254,11 +254,11 @@ public class Coordinator implements Closeable {
             } catch (IOException ex) {
                 LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt, ex);
 
-                if(reschedule) {
+                if (reschedule) {
                     // Find someone else to do its job instead
                     var maybeNewWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE);
                     WorkerClient newWorker;
-                    if(maybeNewWorker.isPresent()) {
+                    if (maybeNewWorker.isPresent()) {
                         newWorker = maybeNewWorker.get();
                     } else {
                         try {
@@ -301,7 +301,7 @@ public class Coordinator implements Closeable {
 
     private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws IOException, InterruptedException {
         var dfsFile = partitionFile(dfsName, partitionsNum);
-        try(var tuples = src.loadAll()) {
+        try (var tuples = src.loadAll()) {
             dfs.writeBatch(dfsFile, tuples.toList());
         }
         return new DfsSrc(dfs, dfsFile);
@@ -313,13 +313,13 @@ public class Coordinator implements Closeable {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             dfsFile.partitions().forEach(info -> {
                 var closeNodes = workerManager.getCloseToDfsNode(info.dfsNodeName());
-                if(closeNodes.isEmpty())
+                if (closeNodes.isEmpty())
                     throw new IllegalStateException("Failed to create partitioned file, " +
                             STR."DFS node \{info.dfsNodeName()} has no connected workers");
 
                 var closestNode = closeNodes.getFirst();
                 scope.fork(() -> {
-                    try(var ctx = closestNode.getSocket().send(
+                    try (var ctx = closestNode.getSocket().send(
                             new CreateFilePartitionPacket(info.fileName(), info.partition()),
                             CreateFilePartitionResultPacket.class
                     )) {
@@ -337,5 +337,17 @@ public class Coordinator implements Closeable {
         }
 
         return dfsFile;
+    }
+
+    public boolean ifJobAlreadyDone(String programFileName) {
+        return dfs.findFile(programFileName.endsWith(".js")
+                ? programFileName.substring(0, programFileName.length() - ".js".length())
+                : programFileName).partitions().isEmpty();
+    }
+
+    public void deletePreviousJob(String programFileName) {
+        dfs.deleteFile(programFileName.endsWith(".js")
+                ? programFileName.substring(0, programFileName.length() - ".js".length())
+                : programFileName);
     }
 }
