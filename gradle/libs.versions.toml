@@ -13,12 +13,15 @@ asm = "9.6"
 [libraries]
 nashorn = "org.openjdk.nashorn:nashorn-core:15.4"
 jackson = "com.fasterxml.jackson.core:jackson-databind:2.16.1"
+jasypt = "org.jasypt:jasypt:1.9.2"
 
 postgresql = "org.postgresql:postgresql:42.7.2"
 jooq = { group = "org.jooq", name = "jooq", version.ref = "jooq" }
 jooq-meta-liquibase = { group = "org.jooq", name = "jooq-meta-extensions-liquibase", version.ref = "jooq" }
 hikaricp = "com.zaxxer:HikariCP:5.1.0"
 liquibase = "org.liquibase:liquibase-core:4.24.0"
+
+
 
 # Logging stuff
 slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref="slf4j" }

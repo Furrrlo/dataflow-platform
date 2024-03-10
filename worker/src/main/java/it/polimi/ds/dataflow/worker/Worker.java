@@ -78,12 +78,12 @@ public class Worker implements Closeable {
     /**
      * Handles the reception of a {@link ScheduleJobPacket} by creating a new file partition in the
      * DFS if it doesn't exist yet. Execute the operation on batches of the partition's data specified
-     * in the packet. Check if shuffle is needed and write in appropriate partitions according to the
-     * {@link ScheduleJobPacket#reshuffle()}
+     * in the packet. Check if shuffle is needed by checking {@link ScheduleJobPacket#reshuffle()}
+     * and write in the appropriate partitions according to the {@link ScheduleJobPacket#partition()}
      *
-     * @param pkt
-     * @return
-     * @throws InterruptedException
+     * @param pkt packet sent by the coordinator and containing the job to be executed
+     * @return a response packet which attests whether the job was executed successfully or not
+     * @throws InterruptedException if the current thread was interrupted while waiting
      */
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
