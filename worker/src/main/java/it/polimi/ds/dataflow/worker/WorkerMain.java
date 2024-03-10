@@ -11,6 +11,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Scanner;
 import java.util.UUID;
@@ -28,7 +29,9 @@ public final class WorkerMain {
     @SuppressWarnings({"AddressSelection", "PMD.AvoidUsingHardCodedIP"})
     public static void main(String[] args) throws IOException, ScriptException {
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
-        Scanner in = new Scanner(System.in);
+        Scanner in = new Scanner(System.in, System.console() != null ?
+                System.console().charset() :
+                StandardCharsets.UTF_8);
 
 //        StandardPBEStringEncryptor encryptor = new StandardPBEStringEncryptor();
 //        encryptor.setPassword("jasypt");
