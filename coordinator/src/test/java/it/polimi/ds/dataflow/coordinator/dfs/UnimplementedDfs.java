@@ -14,12 +14,17 @@ import java.util.stream.Stream;
 public class UnimplementedDfs implements CoordinatorDfs {
 
     @Override
-    public void createFilePartition(String file, int partition, CreateFileOptions... options) {
+    public DfsFilePartitionInfo createFilePartition(String file, int partition, CreateFileOptions... options) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
-    public void createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
+    public DfsFilePartitionInfo createTempFilePartition(String file, int partition, CreateFileOptions... options) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public DfsFilePartitionInfo createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
         throw new UnsupportedOperationException("Not implemented");
     }
 

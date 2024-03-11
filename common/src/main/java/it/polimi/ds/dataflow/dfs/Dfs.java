@@ -7,11 +7,14 @@ import org.jspecify.annotations.Nullable;
 import java.io.Closeable;
 import java.util.Collection;
 
+@SuppressWarnings("UnusedReturnValue")
 public interface Dfs extends Closeable {
 
-    void createFilePartition(String file, int partition, CreateFileOptions... options);
+    DfsFilePartitionInfo createFilePartition(String file, int partition, CreateFileOptions... options);
 
-    void createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options);
+    DfsFilePartitionInfo createTempFilePartition(String file, int partition, CreateFileOptions... options);
+
+    DfsFilePartitionInfo createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options);
 
     DfsFile findFile(String name, int partitions);
 

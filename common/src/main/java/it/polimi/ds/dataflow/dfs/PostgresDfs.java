@@ -16,12 +16,10 @@ import javax.script.ScriptException;
 import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.random.RandomGenerator;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -33,10 +31,12 @@ import static org.jooq.impl.DSL.*;
 public class PostgresDfs implements Dfs {
 
     protected static final String LOCAL_DFS_NODE_NAME = "localhost";
+    protected static final int POSTGRES_IDENTIFIER_MAX_LEN = 63;
 
     protected final DataSource dataSource;
     protected final DSLContext ctx;
     protected final Tuple2JsonSerde serde;
+    protected final RandomGenerator rnd = RandomGenerator.getDefault();
 
     protected PostgresDfs(ScriptEngine engine, Consumer<HikariConfig> configurator) throws ScriptException {
         this(new JacksonTuple2Serde(engine), configurator);
@@ -62,29 +62,56 @@ public class PostgresDfs implements Dfs {
     }
 
     @Override
-    public final void createFilePartition(String file, int partition, CreateFileOptions... options) {
-        doCreateFilePartition(file, file + "_" + partition, partition, options);
+    public final DfsFilePartitionInfo createFilePartition(String file, int partition, CreateFileOptions... options) {
+        return doCreateFilePartition(file, file + "_" + partition, partition, options);
     }
 
     @Override
-    public final void createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
+    public DfsFilePartitionInfo createTempFilePartition(String file, int partition, CreateFileOptions... options) {
+        final var suffix = "_" + partition;
+        final int suffixLen = suffix.length();
+        final int remainingLen = POSTGRES_IDENTIFIER_MAX_LEN - file.length() - suffixLen - 1;
+
+        final String partitionFile;
+        if(remainingLen == 0) {
+            partitionFile = file + suffix;
+        } else if(remainingLen < 0) {
+            partitionFile = file.substring(0, POSTGRES_IDENTIFIER_MAX_LEN - suffixLen) + suffix;
+        } else {
+            final String rndStr = rnd.ints('0', 'z' + 1)
+                    .filter(i -> (i <= '9' || i >= 'A') && (i <= 'Z' || i >= 'a'))
+                    .limit(remainingLen)
+                    .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                    .toString();
+            partitionFile = file + "_" + rndStr + suffix;
+        }
+
+        return doCreateFilePartition(file, partitionFile, partition, options);
+    }
+
+    @Override
+    public final DfsFilePartitionInfo createFilePartition(String file,
+                                                          String partitionFile,
+                                                          int partition,
+                                                          CreateFileOptions... options) {
         if (!partitionFile.startsWith(file + "_"))
             throw new IllegalStateException("partitionFileName must start with fileName");
         if (!partitionFile.endsWith("_" + partition))
             throw new IllegalStateException("partitionFileName must end with partition index");
-        doCreateFilePartition(file, partitionFile, partition, options);
+        return doCreateFilePartition(file, partitionFile, partition, options);
     }
 
-    protected void doCreateFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
+    protected DfsFilePartitionInfo doCreateFilePartition(String file,
+                                                         String partitionFile,
+                                                         int partitionIdx,
+                                                         CreateFileOptions... options) {
         boolean failIfExists = Arrays.stream(options).noneMatch(o -> o == CreateFileOptions.IF_NOT_EXISTS);
         if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
 
-        createPartitionTable(
-                ctx,
-                new DfsFilePartitionInfo(file, partitionFile, partition, LOCAL_DFS_NODE_NAME, true),
-                failIfExists ? 0 : IF_NOT_EXISTS
-        ).execute();
+        var partition = new DfsFilePartitionInfo(file, partitionFile, partitionIdx, LOCAL_DFS_NODE_NAME, true);
+        createPartitionTable(ctx, partition, failIfExists ? 0 : IF_NOT_EXISTS).execute();
+        return partition;
     }
 
     @Override
