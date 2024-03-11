@@ -10,7 +10,7 @@ import java.util.stream.Stream;
 
 public interface CoordinatorDfs extends Dfs {
 
-    @Unmodifiable DfsFile createPartitionedFile(String name, int partitions);
+    @Unmodifiable DfsFile createPartitionedFilePreemptively(String name, int partitions);
 
     DfsFile findFile(String name);
 

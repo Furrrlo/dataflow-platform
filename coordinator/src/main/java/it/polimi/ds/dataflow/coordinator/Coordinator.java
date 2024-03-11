@@ -124,7 +124,7 @@ public class Coordinator implements Closeable {
                     ? partitionFile(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum())
                     // if we do the reshuffling, we can assume each worker will create his partition when he needs to
                     // write into it, and all partitions will be created when we get back to the coordinator to reshuffle
-                    : dfs.createPartitionedFile(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum());
+                    : dfs.createPartitionedFilePreemptively(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum());
 
             try (var scope = new JobStructuredTaskScope<JobSuccessPacket>(currDfsFile.partitionsNum())) {
                 var remainingPartitions = new HashSet<>(currDfsFile.partitions());
@@ -308,7 +308,7 @@ public class Coordinator implements Closeable {
     }
 
     private DfsFile partitionFile(String dfsName, int partitionsNum) throws InterruptedException, IOException {
-        var dfsFile = dfs.createPartitionedFile(dfsName, partitionsNum);
+        var dfsFile = dfs.createPartitionedFilePreemptively(dfsName, partitionsNum);
 
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
             dfsFile.partitions().forEach(info -> {

@@ -149,7 +149,7 @@ class PostgresCoordinatorDfsTest {
     @Test
     void createAndFindPartitionedFile() {
         String file = "createAndFindPartitionedFile";
-        DfsFile partitionedFile = COORDINATOR_DFS.createPartitionedFile(file, 4);
+        DfsFile partitionedFile = COORDINATOR_DFS.createPartitionedFilePreemptively(file, 4);
         assertEquals(partitionedFile, COORDINATOR_DFS.findFile(file));
     }
 
@@ -158,7 +158,7 @@ class PostgresCoordinatorDfsTest {
         String file = "createAndWritePartitionedFileAndPartitions";
         DfsFile coordinatorPartitionedFile;
         try {
-            coordinatorPartitionedFile = COORDINATOR_DFS.createPartitionedFile(file, 4);
+            coordinatorPartitionedFile = COORDINATOR_DFS.createPartitionedFilePreemptively(file, 4);
         } catch (Throwable t) {
             abort("Partitioned file test should have failed");
             return;

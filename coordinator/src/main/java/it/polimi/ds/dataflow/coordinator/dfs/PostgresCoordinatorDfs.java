@@ -42,7 +42,7 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
 
     @Override
     @SuppressWarnings({"TrailingWhitespacesInTextBlock"})
-    public DfsFile createPartitionedFile(String name, int partitions) {
+    public DfsFile createPartitionedFilePreemptively(String name, int partitions) {
         createCoordinatorTable(ctx, "", name, 0).execute();
 
         var foreignServers = List.copyOf(this.foreignServers);
