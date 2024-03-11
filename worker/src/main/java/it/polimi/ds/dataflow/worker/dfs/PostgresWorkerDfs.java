@@ -2,10 +2,7 @@ package it.polimi.ds.dataflow.worker.dfs;
 
 import com.zaxxer.hikari.HikariConfig;
 import it.polimi.ds.dataflow.Tuple2;
-import it.polimi.ds.dataflow.dfs.CreateFileOptions;
-import it.polimi.ds.dataflow.dfs.DfsFile;
-import it.polimi.ds.dataflow.dfs.PostgresDfs;
-import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
+import it.polimi.ds.dataflow.dfs.*;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import liquibase.Liquibase;
 import liquibase.database.Database;
@@ -86,7 +83,10 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     }
 
     @Override
-    protected void doCreateFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
+    protected DfsFilePartitionInfo doCreateFilePartition(String file,
+                                                         String partitionFile,
+                                                         int partition,
+                                                         CreateFileOptions... options) {
         ctx.transaction(tx -> {
             // CREATE TABLE IF NOT EXISTS may fail in concurrent settings
             // with a unique index violation on some internal pg index
@@ -98,15 +98,26 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
                     .execute();
         });
 
-        super.doCreateFilePartition(file, partitionFile, partition, options);
+        return super.doCreateFilePartition(file, partitionFile, partition, options);
     }
 
     @Override
-    public void writeBackupInfo(int jobId, int partition, @Nullable Integer nextBatchPtr) {
-        doWriteBackupInfo(ctx, jobId, partition, nextBatchPtr);
+    public @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition) {
+        return null; // TODO:
     }
 
-    private void doWriteBackupInfo(DSLContext ctx, int jobId, int partition, @Nullable Integer nextBatchPtr) {
+    @Override
+    public void writeBackupInfo(int jobId, int partition, DfsFilePartitionInfo dstFilePartition, @Nullable Integer nextBatchPtr) {
+        doWriteBackupInfo(ctx, jobId, partition, dstFilePartition, nextBatchPtr);
+    }
+
+    @SuppressFBWarnings("UP_UNUSED_PARAMETER") // TODO: save this
+    private void doWriteBackupInfo(DSLContext ctx,
+                                   int jobId,
+                                   int partition,
+                                   @SuppressWarnings("unused")
+                                   DfsFilePartitionInfo dstFilePartition, // TODO: save this
+                                   @Nullable Integer nextBatchPtr) {
         ctx.insertInto(DATAFLOW_JOBS)
                 .columns(DATAFLOW_JOBS.WORKER, DATAFLOW_JOBS.JOBID, DATAFLOW_JOBS.PARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
                 .values(uuid, jobId, partition, nextBatchPtr)
@@ -117,27 +128,14 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     }
 
     @Override
-    public void writeBatchAndBackup(int jobId,
-                                    int srcPartition,
-                                    DfsFile dstFile,
-                                    Collection<Tuple2> tuple,
-                                    @Nullable Integer nextBatchPtr) {
-        ctx.transaction(tx -> {
-            doWriteBatch(tx.dsl(), dstFile, tuple);
-            doWriteBackupInfo(tx.dsl(), jobId, srcPartition, nextBatchPtr);
-        });
-    }
-
-    @Override
     public void writeBatchInPartitionAndBackup(int jobId,
                                                int srcPartition,
-                                               DfsFile dstFile,
-                                               int dstPartition,
+                                               DfsFilePartitionInfo dstFilePartition,
                                                Collection<Tuple2> tuple,
                                                @Nullable Integer nextBatchPtr) {
         ctx.transaction(tx -> {
-            doWriteBatchInPartition(tx.dsl(), dstFile, dstPartition, tuple);
-            doWriteBackupInfo(tx.dsl(), jobId, srcPartition, nextBatchPtr);
+            doWriteBatchInPartition(tx.dsl(), dstFilePartition, tuple);
+            doWriteBackupInfo(tx.dsl(), jobId, srcPartition, dstFilePartition, nextBatchPtr);
         });
     }
 

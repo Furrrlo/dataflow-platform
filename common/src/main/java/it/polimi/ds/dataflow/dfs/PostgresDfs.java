@@ -227,6 +227,18 @@ public class PostgresDfs implements Dfs {
         ).execute();
     }
 
+    protected void doWriteBatchInPartition(DSLContext ctx, DfsFilePartitionInfo dstFilePartition, Collection<Tuple2> tuples) {
+        ctx.batch(tuples.stream()
+                .map(tuple -> ctx
+                        .insertInto(dstFilePartition.isLocal()
+                                        ? partitionTableFor(dstFilePartition)
+                                        : coordinatorTableFor(dstFilePartition.fileName()),
+                                PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
+                        .values(dstFilePartition.partition(), hash(tuple), jsonb(serde.jsonify(tuple))))
+                .collect(Collectors.toList())
+        ).execute();
+    }
+
     @Override
     public BatchRead readNextBatch(DfsFile file, int partitionIdx, int batchHint, @Nullable Integer nextBatchPtr) {
         var maybePartition = file.maybePartitionOf(partitionIdx);

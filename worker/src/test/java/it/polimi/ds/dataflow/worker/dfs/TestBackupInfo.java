@@ -1,5 +1,6 @@
 package it.polimi.ds.dataflow.worker.dfs;
 
+import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import org.jetbrains.annotations.Nullable;
 import org.jooq.DSLContext;
 
@@ -9,7 +10,13 @@ import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.worker.dfs.Tables.DATAFLOW_JOBS;
 
-public record TestBackupInfo(UUID uuid, int jobId, int partition, @Nullable Integer nextBatchPtr) {
+public record TestBackupInfo(
+        UUID uuid,
+        int jobId,
+        int partition,
+        String partitionFileName,
+        @Nullable Integer nextBatchPtr
+) {
 
     public static void truncate(DSLContext ctx) {
         ctx.truncate(DATAFLOW_JOBS).execute();
@@ -23,6 +30,7 @@ public record TestBackupInfo(UUID uuid, int jobId, int partition, @Nullable Inte
                         r.get(DATAFLOW_JOBS.WORKER),
                         r.get(DATAFLOW_JOBS.JOBID),
                         r.get(DATAFLOW_JOBS.PARTITION),
+                        "", // TODO
                         r.get(DATAFLOW_JOBS.NEXTBATCHPTR)
                 ));
     }
@@ -32,6 +40,8 @@ public record TestBackupInfo(UUID uuid, int jobId, int partition, @Nullable Inte
                 b -> dfs.writeBackupInfo(
                         b.jobId,
                         b.partition,
+                        new DfsFilePartitionInfo(
+                                "", b.partitionFileName, b.partition, "localhost", true),
                         b.nextBatchPtr));
     }
 }

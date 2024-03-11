@@ -9,7 +9,6 @@ public record ScheduleJobPacket(
         List<Op> ops,
         int partitions,
         String dfsSrcFileName, int partition,
-        String dfsDstFileName,
-        boolean reshuffle
+        String dfsDstFileName
 ) implements CoordinatorRequestPacket {
 }

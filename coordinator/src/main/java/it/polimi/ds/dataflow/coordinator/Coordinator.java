@@ -32,7 +32,6 @@ import java.util.random.RandomGenerator;
 
 public class Coordinator implements Closeable {
 
-    private static final boolean RESHUFFLE_IN_WORKERS = true;
     private static final int IDLE_WORKER_THRESHOLD = 1;
     private static final long STRAGGLERS_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(30);
     private static final long NO_NODES_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(30);
@@ -104,7 +103,7 @@ public class Coordinator implements Closeable {
 
         final var dfsFilesPrefix = dfsSrc.getDfsFile().name() + "_" + System.currentTimeMillis();
 
-        var currDfsFile = dfsSrc.getDfsFile();
+        var currDfsFile0 = dfsSrc.getDfsFile();
         var remainingOps = new ArrayList<>(program.ops());
         for (int step = 0; !remainingOps.isEmpty(); step++) {
             var currOps = nextOpsBatch(remainingOps);
@@ -113,20 +112,12 @@ public class Coordinator implements Closeable {
             LOGGER.info("Executing step {}...", step);
             long startStepTime = System.nanoTime();
 
-            int jobId = currentJobNumber.getAndIncrement();
-            // TODO: since multiple workers can work on the same partition, they cannot use the same dst file
-            //       so we cannot preemptively create them with a standardized name, they need to use their own
-            //       and then tell the coordinator at the end. This also means that reshuffling can't be done in
-            //       workers
-            DfsFile dstDfsFile = RESHUFFLE_IN_WORKERS
-                    // If workers need to do the reshuffling, we need to be sure all files exist before scheduling 'cause
-                    // otherwise one worker might need to write into the partition of another before he has created it
-                    ? partitionFile(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum())
-                    // if we do the reshuffling, we can assume each worker will create his partition when he needs to
-                    // write into it, and all partitions will be created when we get back to the coordinator to reshuffle
-                    : dfs.createPartitionedFilePreemptively(dfsFilesPrefix + "_step" + step, currDfsFile.partitionsNum());
+            final var currDfsFile = currDfsFile0;
+            final var dstDfsFileName = dfsFilesPrefix + "_step" + step;
 
-            try (var scope = new JobStructuredTaskScope<JobSuccessPacket>(currDfsFile.partitionsNum())) {
+            int jobId = currentJobNumber.getAndIncrement();
+            final List<DfsFilePartitionInfo> dstPartitions;
+            try (var scope = new JobStructuredTaskScope<JobResult>(currDfsFile.partitionsNum())) {
                 var remainingPartitions = new HashSet<>(currDfsFile.partitions());
                 // Start by the ones that have a close worker
                 currDfsFile.partitions().forEach(partition ->
@@ -135,7 +126,8 @@ public class Coordinator implements Closeable {
                                 .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                                 .ifPresent(worker -> {
                                     remainingPartitions.remove(partition);
-                                    scope.fork(() -> scheduleJobPartition(jobId, worker, currOps, partition, dstDfsFile));
+                                    scope.fork(() -> scheduleJobPartition(
+                                            jobId, worker, currOps, partition, dstDfsFileName, currDfsFile.partitionsNum()));
                                 }));
                 // Rest of them
                 remainingPartitions.forEach(partition -> {
@@ -143,10 +135,18 @@ public class Coordinator implements Closeable {
                             .stream()
                             .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                             .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
-                    scope.fork(() -> scheduleJobPartition(jobId, worker, currOps, partition, dstDfsFile));
+                    scope.fork(() -> scheduleJobPartition(
+                            jobId, worker, currOps, partition, dstDfsFileName, currDfsFile.partitionsNum()));
                 });
 
-                scope.join().result(IOException::new);
+                dstPartitions = scope.join().result(IOException::new).stream()
+                        .map(r -> new DfsFilePartitionInfo(
+                                dstDfsFileName,
+                                r.result().pkt().dstDfsPartitionFileName(),
+                                r.partition(),
+                                r.result().worker().getDfsNodeName(),
+                                false))
+                        .toList();
                 LOGGER.info("Executed step {} in {}",
                         step,
                         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startStepTime));
@@ -154,20 +154,22 @@ public class Coordinator implements Closeable {
                 workerManager.unregisterConsumersForJob(jobId);
             }
 
-            if (!RESHUFFLE_IN_WORKERS && currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
+            DfsFile dstDfsFile = dfs.createPartitionedFile(dstDfsFileName, dstPartitions);
+
+            if (currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
                 LOGGER.info("Reshuffling");
                 long startShuffleTime = System.nanoTime();
                 dfs.reshuffle(dstDfsFile);
                 LOGGER.info("Shuffled in {} millis", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startShuffleTime));
             }
 
-            currDfsFile = dstDfsFile;
+            currDfsFile0 = dstDfsFile;
         }
 
         LOGGER.info("Executed program {} in {} millis",
                 programFileName,
                 TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
-        return currDfsFile;
+        return currDfsFile0;
     }
 
     private List<Op> nextOpsBatch(Iterable<Op> remainingOps) {
@@ -185,22 +187,24 @@ public class Coordinator implements Closeable {
         return ops;
     }
 
-    private PartitionResult<JobSuccessPacket> scheduleJobPartition(
+    private record JobResult(WorkerClient worker, JobSuccessPacket pkt) {
+    }
+
+    private PartitionResult<JobResult> scheduleJobPartition(
             int jobId,
             WorkerClient initialWorker,
             List<Op> ops,
             DfsFilePartitionInfo partition,
-            DfsFile resultingFile
+            String dstDfsFileName, int partitionsNum
     ) throws InterruptedException {
 
         var pkt = new ScheduleJobPacket(jobId,
                 ops,
-                resultingFile.partitionsNum(),
+                partitionsNum,
                 partition.fileName(), partition.partition(),
-                resultingFile.name(),
-                RESHUFFLE_IN_WORKERS);
+                dstDfsFileName);
 
-        try (var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobSuccessPacket>>()) {
+        try (var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>>()) {
             scheduleJobPartitionInScope(scope, pkt, initialWorker, true);
 
             while (true) {
@@ -227,7 +231,7 @@ public class Coordinator implements Closeable {
 
     @SuppressWarnings("resource")
     private void scheduleJobPartitionInScope(
-            StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobSuccessPacket>> scope,
+            StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
             ScheduleJobPacket pkt,
             WorkerClient worker,
             boolean reschedule
@@ -243,7 +247,8 @@ public class Coordinator implements Closeable {
                  var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
 
                 return switch (ctx.getPacket()) {
-                    case JobSuccessPacket resPkt -> new PartitionResult<>(pkt.partition(), resPkt);
+                    case JobSuccessPacket resPkt ->
+                            new PartitionResult<>(pkt.partition(), new JobResult(worker, resPkt));
                     case JobFailurePacket(Exception ex) -> {
                         LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new Exception(ex));
                         throw new Exception(ex);

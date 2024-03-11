@@ -78,8 +78,8 @@ public class Worker implements Closeable {
     /**
      * Handles the reception of a {@link ScheduleJobPacket} by creating a new file partition in the
      * DFS if it doesn't exist yet. Execute the operation on batches of the partition's data specified
-     * in the packet. Check if shuffle is needed by checking {@link ScheduleJobPacket#reshuffle()}
-     * and write in the appropriate partitions according to the {@link ScheduleJobPacket#partition()}
+     * in the packet.
+     * Write in the appropriate partitions according to the {@link ScheduleJobPacket#partition()}
      *
      * @param pkt packet sent by the coordinator and containing the job to be executed
      * @return a response packet which attests whether the job was executed successfully or not
@@ -88,18 +88,23 @@ public class Worker implements Closeable {
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions());
+            var restoredBackup = dfs.loadBackupInfo(pkt.jobId(), pkt.partition());
 
             // Create the partition in which we are going to put the results
-            dfs.createFilePartition(pkt.dfsDstFileName(), pkt.partition(), CreateFileOptions.IF_NOT_EXISTS);
-            var dfsDstFile = dfs.findFile(pkt.dfsDstFileName(), pkt.partitions());
+            var dfsDstFilePartition = restoredBackup != null ?
+                    restoredBackup.dstFilePartition() :
+                    dfs.createTempFilePartition(
+                            pkt.dfsDstFileName(),
+                            pkt.partition(),
+                            CreateFileOptions.IF_NOT_EXISTS);
 
             // Initialize backup information
-            dfs.writeBackupInfo(pkt.jobId(), pkt.partition(), null);
+            if(restoredBackup == null)
+                dfs.writeBackupInfo(pkt.jobId(), pkt.partition(), dfsDstFilePartition, null);
 
             var compiledOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
 
-            // TODO: try to see if we are restarting a previous job or it's a new one
-            Integer nextBatchPtr = null;
+            Integer nextBatchPtr = restoredBackup != null ? restoredBackup.nextBatchPtr() : null;
             while (true) {
                 var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
 
@@ -112,21 +117,14 @@ public class Worker implements Closeable {
                         .submit(() -> CompiledProgram.execute(compiledOps, currentBatchData.stream()).toList())
                         .get();
 
-                if (pkt.reshuffle()) {
-                    dfs.writeBatchAndBackup(
-                            pkt.jobId(), pkt.partition(),
-                            dfsDstFile,
-                            currentBatchRes, currentBatch.nextBatchPtr());
-                } else {
-                    dfs.writeBatchInPartitionAndBackup(
-                            pkt.jobId(), pkt.partition(),
-                            dfsDstFile, pkt.partition(),
-                            currentBatchRes, currentBatch.nextBatchPtr());
-                }
+                dfs.writeBatchInPartitionAndBackup(
+                        pkt.jobId(), pkt.partition(),
+                        dfsDstFilePartition,
+                        currentBatchRes, currentBatch.nextBatchPtr());
                 nextBatchPtr = currentBatch.nextBatchPtr();
             }
 
-            return new JobSuccessPacket();
+            return new JobSuccessPacket(dfsDstFilePartition.partitionFileName());
 
         } catch (InterruptedException ex) {
             throw ex;
