@@ -3,10 +3,12 @@ package it.polimi.ds.dataflow.coordinator.dfs;
 import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.dfs.CreateFileOptions;
 import it.polimi.ds.dataflow.dfs.DfsFile;
+import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.SequencedCollection;
 import java.util.stream.Stream;
 
 public class UnimplementedDfs implements CoordinatorDfs {
@@ -58,6 +60,11 @@ public class UnimplementedDfs implements CoordinatorDfs {
 
     @Override
     public @Unmodifiable DfsFile createPartitionedFilePreemptively(String name, int partitions) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public @Unmodifiable DfsFile createPartitionedFile(String name, SequencedCollection<DfsFilePartitionInfo> partitions) {
         throw new UnsupportedOperationException("Not implemented");
     }
 

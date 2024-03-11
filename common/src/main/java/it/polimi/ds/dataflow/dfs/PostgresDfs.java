@@ -252,6 +252,10 @@ public class PostgresDfs implements Dfs {
             return partitionTableFor(file.name(), partition);
         }
 
+        public static Table<Record> partitionTableFor(DfsFilePartitionInfo partition) {
+            return table(name(partition.partitionFileName()));
+        }
+
         public static Query createPartitionTable(DSLContext ctx,
                                                  String fileName,
                                                  int partition,

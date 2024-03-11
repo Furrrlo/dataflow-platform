@@ -7,15 +7,17 @@ import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.jetbrains.annotations.Unmodifiable;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.jooq.impl.SQLDataType;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -59,6 +61,72 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
                              SERVER \{server}
                              """);
                     return new DfsFilePartitionInfo(name, partition, server, false);
+                })
+                .toList());
+    }
+
+    @Override
+    @SuppressWarnings("TrailingWhitespacesInTextBlock")
+    public @Unmodifiable DfsFile createPartitionedFile(String name, SequencedCollection<DfsFilePartitionInfo> partitions) {
+        @SuppressWarnings({
+                "serial", // Don't care about this being serializable
+                "RedundantSuppression" // Javac complains about serial, IntelliJ about the suppression
+        })
+        @SuppressFBWarnings("SE_BAD_FIELD") // Don't care about this being serializable
+        class FastIllegalStateException extends IllegalStateException {
+
+            public FastIllegalStateException(String s) {
+                super(s);
+            }
+
+            @Override
+            public Throwable fillInStackTrace() {
+                return this;
+            }
+        }
+
+        final Map<Integer, List<DfsFilePartitionInfo>> partitionsToTableNames = partitions.stream()
+                .collect(Collectors.groupingBy(
+                        DfsFilePartitionInfo::partition,
+                        Collectors.toList()));
+
+        final var exs = new ArrayList<RuntimeException>(partitions.stream()
+                .filter(p -> !p.fileName().equals(name))
+                .map(p -> new FastIllegalStateException("Partition " + p + " does not refer to file " + name))
+                .toList());
+
+        final var missingPartitions = new ArrayList<Integer>();
+        final int maxPartition = partitionsToTableNames.keySet().stream().mapToInt(i -> i).max().orElse(-1);
+        for(int i = 0; i <= maxPartition; i++) {
+            if(partitionsToTableNames.get(i) == null)
+                missingPartitions.add(i);
+        }
+
+        if(!missingPartitions.isEmpty())
+            exs.add(new FastIllegalStateException("Missing partitions " + missingPartitions));
+
+        exs.addAll(partitionsToTableNames.entrySet().stream()
+                .filter(e -> e.getValue().size() > 1)
+                .map(e -> new FastIllegalStateException(
+                        "Duplicate partition names for " + e.getKey() + ": " + e.getValue()))
+                .toList());
+
+        if(!exs.isEmpty()) {
+            var ex = new IllegalStateException("Failed to create partitioned file " + name);
+            exs.forEach(ex::addSuppressed);
+            throw ex;
+        }
+
+        createCoordinatorTable(ctx, LOCAL_DFS_NODE_NAME, name, 0).execute();
+        return new DfsFile(name, partitions.stream()
+                .map(p -> {
+                    ctx.execute(STR."""
+                             CREATE FOREIGN TABLE \{ctx.render(partitionTableFor(p))}
+                             PARTITION OF \{ctx.render(coordinatorTableFor(name))}
+                             FOR VALUES FROM (\{p.partition()}) TO (\{p.partition() + 1})
+                             SERVER \{p.dfsNodeName()}
+                             """);
+                    return new DfsFilePartitionInfo(name, p.partition(), p.dfsNodeName(), false);
                 })
                 .toList());
     }
