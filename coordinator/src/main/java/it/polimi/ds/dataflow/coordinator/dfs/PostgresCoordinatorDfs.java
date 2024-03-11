@@ -7,7 +7,7 @@ import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
-import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.utils.FastIllegalStateException;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.jooq.impl.SQLDataType;
@@ -70,23 +70,6 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     @Override
     @SuppressWarnings("TrailingWhitespacesInTextBlock")
     public @Unmodifiable DfsFile createPartitionedFile(String name, SequencedCollection<DfsFilePartitionInfo> partitions) {
-        @SuppressWarnings({
-                "serial", // Don't care about this being serializable
-                "RedundantSuppression" // Javac complains about serial, IntelliJ about the suppression
-        })
-        @SuppressFBWarnings("SE_BAD_FIELD") // Don't care about this being serializable
-        class FastIllegalStateException extends IllegalStateException {
-
-            public FastIllegalStateException(String s) {
-                super(s);
-            }
-
-            @Override
-            public Throwable fillInStackTrace() {
-                return this;
-            }
-        }
-
         final Map<Integer, List<DfsFilePartitionInfo>> partitionsToTableNames = partitions.stream()
                 .collect(Collectors.groupingBy(
                         DfsFilePartitionInfo::partition,

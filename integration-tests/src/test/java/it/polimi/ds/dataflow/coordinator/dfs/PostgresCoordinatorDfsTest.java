@@ -7,6 +7,7 @@ import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import it.polimi.ds.dataflow.utils.Closeables;
 import it.polimi.ds.dataflow.worker.dfs.PostgresWorkerDfs;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -18,10 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -147,15 +145,15 @@ class PostgresCoordinatorDfsTest {
     }
 
     @Test
-    void createAndFindPartitionedFile() {
-        String file = "createAndFindPartitionedFile";
+    void createPartitionedFilePreemptively() {
+        String file = "createPartitionedFilePreemptively";
         DfsFile partitionedFile = COORDINATOR_DFS.createPartitionedFilePreemptively(file, 4);
         assertEquals(partitionedFile, COORDINATOR_DFS.findFile(file));
     }
 
     @Test
-    void createAndWritePartitionedFileAndPartitions() {
-        String file = "createAndWritePartitionedFileAndPartitions";
+    void createPreemptivelyAndWritePartitionedFileAndPartitions() {
+        String file = "createPreemptivelyAndWritePartitionedFileAndPartitions";
         DfsFile coordinatorPartitionedFile;
         try {
             coordinatorPartitionedFile = COORDINATOR_DFS.createPartitionedFilePreemptively(file, 4);
@@ -164,12 +162,6 @@ class PostgresCoordinatorDfsTest {
             return;
         }
 
-        var tuplesToWrite = List.of(
-                new Tuple2("key1", "value1"),
-                new Tuple2("key2", "value2"),
-                new Tuple2("key3", "value2"));
-        var tuplesToRead = new ArrayList<Tuple2>();
-
         // Create the file partition on the correct workers and try to write into it
         for (DfsFilePartitionInfo partition : coordinatorPartitionedFile.partitions()) {
             PostgresWorker worker = WORKERS.stream()
@@ -177,8 +169,60 @@ class PostgresCoordinatorDfsTest {
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException(STR."Missing node for partition \{partition}"));
             worker.getDfs().createFilePartition(partition.fileName(), partition.partition());
+        }
 
-            var workerFile = worker.getDfs().findFile(partition.fileName(), coordinatorPartitionedFile.partitionsNum());
+        List<Tuple2> tuplesToRead = new ArrayList<>();
+        tuplesToRead = doWriteOwnedPartition(coordinatorPartitionedFile, coordinatorPartitionedFile.partitions(), tuplesToRead);
+        doWriteNonOwnedPartition(coordinatorPartitionedFile, tuplesToRead);
+    }
+
+    @Test
+    void createAndWritePartitionedFileAndPartitions() {
+        String file = "cawpfap"; // Otherwise we exceed the name length
+        int partitionsNum = 4;
+
+        // Create the file partition on the correct workers and try to write into it
+        var partitions = new ArrayList<DfsFilePartitionInfo>();
+        for (int partitionIdx = 0; partitionIdx < partitionsNum; partitionIdx++) {
+            PostgresWorker worker = WORKERS.get(partitionIdx % WORKERS.size());
+            String partitionFileName =
+                    file + "_" + worker.postgresNodeName() + "_" + System.currentTimeMillis() + "_" + partitionIdx;
+            worker.getDfs().createFilePartition(file, partitionFileName, partitionIdx);
+            partitions.add(new DfsFilePartitionInfo(
+                    file, partitionFileName, partitionIdx, worker.postgresNodeName(), false));
+        }
+
+        List<Tuple2> tuplesToRead = new ArrayList<>();
+        tuplesToRead = doWriteOwnedPartition(null, partitions, tuplesToRead);
+
+        DfsFile coordinatorPartitionedFile = COORDINATOR_DFS.createPartitionedFile(file, partitions);
+        var tupleComparator = Comparator.<Tuple2, String>comparing(t -> (String) t.key());
+        try (var res = COORDINATOR_DFS.loadAll(coordinatorPartitionedFile)) {
+            assertEquals(
+                    tuplesToRead.stream().sorted(tupleComparator).toList(),
+                    res.sorted(tupleComparator).toList());
+        }
+
+        doWriteNonOwnedPartition(coordinatorPartitionedFile, tuplesToRead);
+    }
+
+    private List<Tuple2> doWriteOwnedPartition(@Nullable DfsFile coordinatorPartitionedFile,
+                                               SequencedCollection<DfsFilePartitionInfo> coordinatorPartitions,
+                                               List<Tuple2> tuplesToAlreadyRead) {
+        var tuplesToWrite = List.of(
+                new Tuple2("key1", "value1"),
+                new Tuple2("key2", "value2"),
+                new Tuple2("key3", "value2"));
+        var tuplesToRead = new ArrayList<>(tuplesToAlreadyRead);
+
+        // Try to write into it
+        for (DfsFilePartitionInfo partition : coordinatorPartitions) {
+            PostgresWorker worker = WORKERS.stream()
+                    .filter(w -> partition.dfsNodeName().equals(w.postgresNodeName()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(STR."Missing node for partition \{partition}"));
+
+            var workerFile = worker.getDfs().findFile(partition.fileName(), coordinatorPartitions.size());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +
@@ -191,12 +235,24 @@ class PostgresCoordinatorDfsTest {
             });
         }
 
-        var tupleComparator = Comparator.<Tuple2, String>comparing(t -> (String) t.key());
-        try(var res = COORDINATOR_DFS.loadAll(coordinatorPartitionedFile)) {
-            assertEquals(
-                    tuplesToRead.stream().sorted(tupleComparator).toList(),
-                    res.sorted(tupleComparator).toList());
+        if(coordinatorPartitionedFile != null) {
+            var tupleComparator = Comparator.<Tuple2, String>comparing(t -> (String) t.key());
+            try (var res = COORDINATOR_DFS.loadAll(coordinatorPartitionedFile)) {
+                assertEquals(
+                        tuplesToRead.stream().sorted(tupleComparator).toList(),
+                        res.sorted(tupleComparator).toList());
+            }
         }
+
+        return tuplesToRead;
+    }
+
+    private void doWriteNonOwnedPartition(DfsFile coordinatorPartitionedFile, List<Tuple2> tuplesToAlreadyRead) {
+        var tuplesToWrite = List.of(
+                new Tuple2("key1", "value1"),
+                new Tuple2("key2", "value2"),
+                new Tuple2("key3", "value2"));
+        var tuplesToRead = new ArrayList<>(tuplesToAlreadyRead);
 
         // Try to write from one which does not own the partition
         for (DfsFilePartitionInfo partition : coordinatorPartitionedFile.partitions()) {
@@ -220,6 +276,7 @@ class PostgresCoordinatorDfsTest {
             });
         }
 
+        var tupleComparator = Comparator.<Tuple2, String>comparing(t -> (String) t.key());
         try(var res = COORDINATOR_DFS.loadAll(coordinatorPartitionedFile)) {
             assertEquals(
                     tuplesToRead.stream().sorted(tupleComparator).toList(),
