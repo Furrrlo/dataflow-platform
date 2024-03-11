@@ -91,8 +91,8 @@ public final class CoordinatorMain {
                 } while (!response.equals("n") && !response.equals("y"));
                 if (response.equals("n"))
                     continue;
-                else
-                    coordinator.deletePreviousJob(programFileName);
+
+                coordinator.deletePreviousJob(programFileName);
             }
 
             String src;
@@ -104,15 +104,13 @@ public final class CoordinatorMain {
                 coordinator.compileAndExecuteProgram(programFileName, src);
             } catch (InterruptedException | InterruptedIOException ex) {
                 throw ex;
-            } catch (ArithmeticException e) {
-                logger.error("No active workers connected, couldn't proceed with job \"{}\" execution", programFileName, e);
             } catch (Throwable t) {
                 //Raised if an identical job (with the same name) has been already submitted
                 //For instance, if word-count example is submitted two times, the second time
                 //the execution will raise a DataAccessException due to the fact that the table
                 //"word-count" already exists.
                 //This exception is also raised when we start the coordinator, we give it a job but
-                //there are 0 active workers (raise an ArithmeticException: Division by 0)
+                //there are 0 active workers.
                 logger.error("Unrecoverable failure while executing job {}", programFileName, t);
             }
         }
