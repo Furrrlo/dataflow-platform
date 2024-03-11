@@ -32,6 +32,8 @@ import static org.jooq.impl.DSL.*;
 
 public class PostgresDfs implements Dfs {
 
+    protected static final String LOCAL_DFS_NODE_NAME = "localhost";
+
     protected final DataSource dataSource;
     protected final DSLContext ctx;
     protected final Tuple2JsonSerde serde;
@@ -60,12 +62,29 @@ public class PostgresDfs implements Dfs {
     }
 
     @Override
-    public void createFilePartition(String file, int partition, CreateFileOptions... options) {
+    public final void createFilePartition(String file, int partition, CreateFileOptions... options) {
+        doCreateFilePartition(file, file + "_" + partition, partition, options);
+    }
+
+    @Override
+    public final void createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
+        if (!partitionFile.startsWith(file + "_"))
+            throw new IllegalStateException("partitionFileName must start with fileName");
+        if (!partitionFile.endsWith("_" + partition))
+            throw new IllegalStateException("partitionFileName must end with partition index");
+        doCreateFilePartition(file, partitionFile, partition, options);
+    }
+
+    protected void doCreateFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
         boolean failIfExists = Arrays.stream(options).noneMatch(o -> o == CreateFileOptions.IF_NOT_EXISTS);
         if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
 
-        createPartitionTable(ctx, file, partition, failIfExists ? 0 : IF_NOT_EXISTS).execute();
+        createPartitionTable(
+                ctx,
+                new DfsFilePartitionInfo(file, partitionFile, partition, LOCAL_DFS_NODE_NAME, true),
+                failIfExists ? 0 : IF_NOT_EXISTS
+        ).execute();
     }
 
     @Override
@@ -73,42 +92,40 @@ public class PostgresDfs implements Dfs {
         record TmpTableData(String tablename, String srvname, boolean isLocal) {
         }
 
+        String tableRegex = STR."^\{name}(_.*|)_(0|[1-9][0-9]*)$";
         return new DfsFile(name, partitions, Stream.concat(
                         // Could use ctx.meta() instead, but it would use a less efficient query
                         ctx.select(PgTables.TABLENAME)
                                 .from(PgTables.PG_TABLES)
                                 .where(PgTables.SCHEMANAME.notEqual("pg_catalog")
                                         .and(PgTables.SCHEMANAME.notEqual("information_schema"))
-                                        .and(PgTables.TABLENAME.like(STR."\{name}_%")))
+                                        .and(PgTables.TABLENAME.likeRegex(tableRegex)))
                                 .stream()
-                                .map(r -> new TmpTableData(r.get(PgTables.TABLENAME), "localhost", true)),
+                                .map(r -> new TmpTableData(r.get(PgTables.TABLENAME), LOCAL_DFS_NODE_NAME, true)),
                         ctx.select(PgClass.RELNAME, PgForeignServer.SRVNAME)
                                 .from(PgForeignTable.PG_FOREIGN_TABLE
                                         .join(PgClass.PG_CLASS)
                                         .on(PgForeignTable.FTRELID.eq(PgClass.OID))
                                         .join(PgForeignServer.PG_FOREIGN_SERVER)
                                         .on(PgForeignTable.FTSERVER.eq(PgForeignServer.OID)))
-                                .where(PgClass.RELNAME.like(STR."\{name}_%"))
+                                .where(PgClass.RELNAME.likeRegex(tableRegex))
                                 .stream()
                                 .map(r -> new TmpTableData(
                                         r.get(PgClass.RELNAME),
                                         r.get(PgForeignServer.SRVNAME),
                                         false)))
-                .filter(r -> r.tablename()
-                        .substring(name.length() + "_".length())
-                        .matches("0|[1-9][0-9]*"))
                 .map(r -> {
                     var currRelName = r.tablename();
 
                     final int partition;
                     try {
-                        partition = Integer.parseInt(currRelName
-                                .substring(name.length() + "_".length()));
+                        partition = Integer.parseInt(currRelName.substring(
+                                currRelName.lastIndexOf('_') + 1));
                     } catch (NumberFormatException ex) {
                         throw new AssertionError(STR."Unexpectedly failed to parse integer for \{currRelName}", ex);
                     }
 
-                    return new DfsFilePartitionInfo(name, partition, r.srvname, r.isLocal);
+                    return new DfsFilePartitionInfo(name, currRelName, partition, r.srvname, r.isLocal);
                 })
                 .toList());
     }
@@ -119,14 +136,13 @@ public class PostgresDfs implements Dfs {
     }
 
     @Override
-    public void writeInPartition(DfsFile file, Tuple2 tuple, int partition) {
-        boolean isLocal = isPartitionLocal(file, partition);
-
-        var table = isLocal
-                ? partitionTableFor(file, partition)
+    public void writeInPartition(DfsFile file, Tuple2 tuple, int partitionIdx) {
+        var maybePartition = file.maybePartitionOf(partitionIdx);
+        var table = maybePartition != null && maybePartition.isLocal()
+                ? partitionTableFor(maybePartition)
                 : coordinatorTableFor(file);
         ctx.insertInto(table, PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                .values(partition, hash(tuple), jsonb(serde.jsonify(tuple)))
+                .values(partitionIdx, hash(tuple), jsonb(serde.jsonify(tuple)))
                 .execute();
     }
 
@@ -171,26 +187,26 @@ public class PostgresDfs implements Dfs {
         doWriteBatchInPartition(ctx, file, partition, tuples);
     }
 
-    protected void doWriteBatchInPartition(DSLContext ctx, DfsFile file, int partition, Collection<Tuple2> tuples) {
-        boolean isLocal = isPartitionLocal(file, partition);
-
+    protected void doWriteBatchInPartition(DSLContext ctx, DfsFile file, int partitionIdx, Collection<Tuple2> tuples) {
+        var maybePartition = file.maybePartitionOf(partitionIdx);
         ctx.batch(tuples.stream()
                 .map(tuple -> ctx
-                        .insertInto(isLocal
-                                        ? partitionTableFor(file, partition)
+                        .insertInto(maybePartition != null && maybePartition.isLocal()
+                                        ? partitionTableFor(maybePartition)
                                         : coordinatorTableFor(file.name()),
                                 PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                        .values(partition, hash(tuple), jsonb(serde.jsonify(tuple))))
+                        .values(partitionIdx, hash(tuple), jsonb(serde.jsonify(tuple))))
                 .collect(Collectors.toList())
         ).execute();
     }
 
     @Override
-    public BatchRead readNextBatch(DfsFile file, int partition, int batchHint, @Nullable Integer nextBatchPtr) {
+    public BatchRead readNextBatch(DfsFile file, int partitionIdx, int batchHint, @Nullable Integer nextBatchPtr) {
+        var maybePartition = file.maybePartitionOf(partitionIdx);
         var selectStep = ctx
                 .select(KEY_HASH_COLUMN, DATA_COLUMN)
-                .from(isPartitionLocal(file, partition)
-                        ? partitionTableFor(file, partition)
+                .from(maybePartition != null && maybePartition.isLocal()
+                        ? partitionTableFor(maybePartition)
                         : coordinatorTableFor(file));
         SelectOrderByStep<Record2<Integer, JSONB>> orderByStep = nextBatchPtr != null
                 ? selectStep.where(KEY_HASH_COLUMN.gt(nextBatchPtr))
@@ -212,14 +228,6 @@ public class PostgresDfs implements Dfs {
 
     protected int calculatePartition(Tuple2 tuple, int partitions) {
         return (int) (Integer.toUnsignedLong(hash(tuple)) % partitions);
-    }
-
-    protected boolean isPartitionLocal(DfsFile file, int partition) {
-        return file.partitions().stream()
-                .filter(p -> p.partition() == partition)
-                .findFirst()
-                .map(DfsFilePartitionInfo::isLocal)
-                .orElse(Boolean.FALSE);
     }
 
     public static final class DfsFileTable {
@@ -244,24 +252,15 @@ public class PostgresDfs implements Dfs {
             return coordinatorTableFor(file.name());
         }
 
-        public static Table<Record> partitionTableFor(String fileName, int partition) {
-            return table(name(STR."\{fileName}_\{partition}"));
-        }
-
-        public static Table<Record> partitionTableFor(DfsFile file, int partition) {
-            return partitionTableFor(file.name(), partition);
-        }
-
         public static Table<Record> partitionTableFor(DfsFilePartitionInfo partition) {
             return table(name(partition.partitionFileName()));
         }
 
         public static Query createPartitionTable(DSLContext ctx,
-                                                 String fileName,
-                                                 int partition,
+                                                 DfsFilePartitionInfo partition,
                                                  @MagicConstant(flags = {IF_NOT_EXISTS}) int flags) {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
-            var table = partitionTableFor(fileName, partition);
+            var table = partitionTableFor(partition);
             var createTable = ifNotExists
                     ? ctx.createTableIfNotExists(table)
                     : ctx.createTable(table);
@@ -270,7 +269,7 @@ public class PostgresDfs implements Dfs {
                             .column(PARTITION_COLUMN)
                             .column(KEY_HASH_COLUMN)
                             .column(DATA_COLUMN)
-                            .check(PARTITION_COLUMN.eq(partition)),
+                            .check(PARTITION_COLUMN.eq(partition.partition())),
                     createKeyHashIndex(ctx, table, flags));
         }
 

@@ -45,22 +45,24 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     @Override
     @SuppressWarnings({"TrailingWhitespacesInTextBlock"})
     public DfsFile createPartitionedFilePreemptively(String name, int partitions) {
-        createCoordinatorTable(ctx, "", name, 0).execute();
+        createCoordinatorTable(ctx, LOCAL_DFS_NODE_NAME, name, 0).execute();
 
         var foreignServers = List.copyOf(this.foreignServers);
         if (foreignServers.isEmpty())
             throw new IllegalStateException("No active workers connected");
 
         return new DfsFile(name, IntStream.range(0, partitions)
-                .mapToObj(partition -> {
-                    String server = foreignServers.get(partition % foreignServers.size());
+                .mapToObj(partitionIdx -> {
+                    String server = foreignServers.get(partitionIdx % foreignServers.size());
+                    var partition = new DfsFilePartitionInfo(
+                            name, name + "_" + partitionIdx, partitionIdx, server, false);
                     ctx.execute(STR."""
-                             CREATE FOREIGN TABLE \{ctx.render(partitionTableFor(name, partition))}
+                             CREATE FOREIGN TABLE \{ctx.render(partitionTableFor(partition))}
                              PARTITION OF \{ctx.render(coordinatorTableFor(name))}
-                             FOR VALUES FROM (\{partition}) TO (\{partition + 1})
+                             FOR VALUES FROM (\{partitionIdx}) TO (\{partitionIdx + 1})
                              SERVER \{server}
                              """);
-                    return new DfsFilePartitionInfo(name, partition, server, false);
+                    return partition;
                 })
                 .toList());
     }
@@ -126,7 +128,8 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
                              FOR VALUES FROM (\{p.partition()}) TO (\{p.partition() + 1})
                              SERVER \{p.dfsNodeName()}
                              """);
-                    return new DfsFilePartitionInfo(name, p.partition(), p.dfsNodeName(), false);
+                    return new DfsFilePartitionInfo(
+                            name, p.partitionFileName(), p.partition(), p.dfsNodeName(), false);
                 })
                 .toList());
     }

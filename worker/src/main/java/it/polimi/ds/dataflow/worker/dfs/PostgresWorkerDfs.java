@@ -86,7 +86,7 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     }
 
     @Override
-    public void createFilePartition(String file, int partition, CreateFileOptions... options) {
+    protected void doCreateFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
         ctx.transaction(tx -> {
             // CREATE TABLE IF NOT EXISTS may fail in concurrent settings
             // with a unique index violation on some internal pg index
@@ -98,7 +98,7 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
                     .execute();
         });
 
-        super.createFilePartition(file, partition, options);
+        super.doCreateFilePartition(file, partitionFile, partition, options);
     }
 
     @Override

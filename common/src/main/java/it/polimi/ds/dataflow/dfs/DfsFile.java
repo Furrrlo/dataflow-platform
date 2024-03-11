@@ -1,6 +1,7 @@
 package it.polimi.ds.dataflow.dfs;
 
 import org.jetbrains.annotations.Unmodifiable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.SequencedCollection;
 
@@ -10,5 +11,12 @@ public record DfsFile(String name,
 
     public DfsFile(String name, @Unmodifiable SequencedCollection<DfsFilePartitionInfo> partitions) {
         this(name, partitions.size(), partitions);
+    }
+
+    public @Nullable DfsFilePartitionInfo maybePartitionOf(int partitionIdx) {
+        return partitions().stream()
+                .filter(p -> p.partition() == partitionIdx)
+                .findFirst()
+                .orElse(null);
     }
 }

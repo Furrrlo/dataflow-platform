@@ -19,6 +19,11 @@ public class UnimplementedDfs implements CoordinatorDfs {
     }
 
     @Override
+    public void createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
     public DfsFile findFile(String name, int partitions) {
         throw new UnsupportedOperationException("Not implemented");
     }
