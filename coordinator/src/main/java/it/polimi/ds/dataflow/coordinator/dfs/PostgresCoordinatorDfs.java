@@ -12,8 +12,9 @@ import org.jooq.impl.SQLDataType;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -23,7 +24,7 @@ import static org.jooq.impl.DSL.name;
 
 public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDfs {
 
-    private final List<String> foreignServers = new ArrayList<>();
+    private final Set<String> foreignServers = ConcurrentHashMap.newKeySet();
 
     public PostgresCoordinatorDfs(Tuple2JsonSerde serde,
                                   Consumer<HikariConfig> configurator) {
@@ -43,6 +44,11 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     @SuppressWarnings({"TrailingWhitespacesInTextBlock"})
     public DfsFile createPartitionedFile(String name, int partitions) {
         createCoordinatorTable(ctx, "", name, 0).execute();
+
+        var foreignServers = List.copyOf(this.foreignServers);
+        if (foreignServers.isEmpty())
+            throw new IllegalStateException("No active workers connected");
+
         return new DfsFile(name, IntStream.range(0, partitions)
                 .mapToObj(partition -> {
                     String server = foreignServers.get(partition % foreignServers.size());
