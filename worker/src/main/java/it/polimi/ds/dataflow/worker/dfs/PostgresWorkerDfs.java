@@ -102,6 +102,11 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     }
 
     @Override
+    public DfsFile findFile(String name, int partitions) {
+        return new DfsFile(name, partitions, findCandidateFilePartitions(name));
+    }
+
+    @Override
     public @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition) {
         return null; // TODO:
     }

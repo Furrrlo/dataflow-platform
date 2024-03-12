@@ -29,11 +29,6 @@ public class UnimplementedDfs implements CoordinatorDfs {
     }
 
     @Override
-    public DfsFile findFile(String name, int partitions) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    @Override
     public void deleteFile(String name) {
         throw new UnsupportedOperationException("Not implemented");
     }

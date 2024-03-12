@@ -2,6 +2,7 @@ package it.polimi.ds.dataflow.worker.dfs;
 
 import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.dfs.Dfs;
+import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import org.jspecify.annotations.Nullable;
 
@@ -11,6 +12,8 @@ import java.util.SequencedCollection;
 import static it.polimi.ds.dataflow.socket.packets.HelloPacket.PreviousJob;
 
 public interface WorkerDfs extends Dfs {
+
+    DfsFile findFile(String name, int partitions);
 
     @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition);
 

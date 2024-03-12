@@ -114,13 +114,12 @@ public class PostgresDfs implements Dfs {
         return partition;
     }
 
-    @Override
-    public DfsFile findFile(String name, int partitions) {
+    protected List<DfsFilePartitionInfo> findCandidateFilePartitions(String name) {
         record TmpTableData(String tablename, String srvname, boolean isLocal) {
         }
 
         String tableRegex = STR."^\{name}(_.*|)_(0|[1-9][0-9]*)$";
-        return new DfsFile(name, partitions, Stream.concat(
+        return Stream.concat(
                         // Could use ctx.meta() instead, but it would use a less efficient query
                         ctx.select(PgTables.TABLENAME)
                                 .from(PgTables.PG_TABLES)
@@ -154,7 +153,7 @@ public class PostgresDfs implements Dfs {
 
                     return new DfsFilePartitionInfo(name, currRelName, partition, r.srvname, r.isLocal);
                 })
-                .toList());
+                .toList();
     }
 
     @Override
