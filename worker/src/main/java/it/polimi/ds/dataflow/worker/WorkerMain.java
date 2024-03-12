@@ -14,7 +14,7 @@ import javax.script.ScriptException;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import java.net.Socket;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -77,7 +77,7 @@ public final class WorkerMain {
         var cpuThreadPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), Thread.ofPlatform()
                 .name("worker-cpu-", 0)
                 .factory());
-        try (Worker worker = new Worker(
+        try (Worker worker = Worker.connect(
                 uuid,
                 dfsNodeName,
                 engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
@@ -90,9 +90,10 @@ public final class WorkerMain {
                     ds.setPassword(pgPassword);
                     config.setDataSource(ds);
                 }),
-                new WorkerSocketManagerImpl(new Socket(
+                new InetSocketAddress(
                         prop.getProperty("COORDINATOR_IP"),
-                        Integer.parseInt(prop.getProperty("COORDINATOR_PORT"))))
+                        Integer.parseInt(prop.getProperty("COORDINATOR_PORT"))),
+                WorkerSocketManagerImpl::new
         )) {
             worker.loop();
         } finally {

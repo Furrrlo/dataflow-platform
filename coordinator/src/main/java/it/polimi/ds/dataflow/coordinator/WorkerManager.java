@@ -6,60 +6,112 @@ import it.polimi.ds.dataflow.socket.packets.HelloPacket;
 import it.polimi.ds.dataflow.utils.Closeables;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jetbrains.annotations.Unmodifiable;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
-import java.io.UncheckedIOException;
 import java.net.ServerSocket;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.net.SocketException;
+import java.nio.channels.ClosedByInterruptException;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public final class WorkerManager implements Closeable {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(WorkerManager.class);
+
     private final ServerSocket socket;
     private final ExecutorService threadPool;
+    private final @Nullable AutoCloseable onUnrecoverableException;
+
+    private final Supplier<@Nullable Future<?>> acceptLoopTask;
+    private final Collection<Future<?>> waitHelloTasks = ConcurrentHashMap.newKeySet();
 
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
     private final Set<CompletableFuture<WorkerClient>> reconnectionFutures = ConcurrentHashMap.newKeySet();
 
-    public static WorkerManager listen(ExecutorService threadPool, int port) throws IOException {
-        WorkerManager mngr = new WorkerManager(threadPool, new ServerSocket(port));
-        threadPool.execute(mngr::execute);
+    public static WorkerManager listen(ExecutorService threadPool,
+                                       int port,
+                                       @Nullable AutoCloseable onUnrecoverableException) throws IOException {
+        final var taskRef = new AtomicReference<@Nullable Future<?>>();
+        WorkerManager mngr = new WorkerManager(
+                threadPool,
+                new ServerSocket(port),
+                onUnrecoverableException,
+                taskRef::get);
+        taskRef.set(threadPool.submit(mngr::execute));
         return mngr;
     }
 
-    private WorkerManager(ExecutorService threadPool, ServerSocket socket) {
+    private WorkerManager(ExecutorService threadPool,
+                          ServerSocket socket,
+                          @Nullable AutoCloseable onUnrecoverableException,
+                          Supplier<Future<?>> acceptLoopTask) {
         this.threadPool = threadPool;
         this.socket = socket;
+        this.onUnrecoverableException = onUnrecoverableException;
+        this.acceptLoopTask = acceptLoopTask;
     }
 
     private void execute() {
         try {
             while (!Thread.interrupted()) {
-                CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, socket.accept());
-                threadPool.execute(() -> {
+                var workerSocket = socket.accept();
+                if(Thread.interrupted()) {
+                    workerSocket.close();
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+
+                CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, workerSocket);
+                // TODO: set socket timeout & start ping-pong
+
+                var helloTaskRef = new AtomicReference<Future<?>>();
+                var task = threadPool.submit(() -> {
                     try {
                         onNewConnection(worker);
-                    } catch (InterruptedIOException ex) {
-                        // Interrupted because close() was called
-                    } catch (IOException ex) {
-                        throw new UncheckedIOException(ex);
+                    } catch (Throwable ex) {
+                        LOGGER.error("Uncaught exception in #onNewConnection(worker) call", ex);
+                    } finally {
+                        var helloTask = helloTaskRef.get();
+                        if(helloTask != null)
+                            waitHelloTasks.remove(helloTask);
                     }
                 });
+                helloTaskRef.set(task);
+                waitHelloTasks.add(task);
             }
-        } catch (IOException e) {
-            // TODO: all should die in a sea of flames
+        } catch (ClosedByInterruptException ex) {
+            Thread.currentThread().interrupt();
+        } catch (Throwable ex) {
+            @SuppressWarnings("PMD.AvoidInstanceofChecksInCatchClause")
+            boolean isSocketException = ex instanceof SocketException;
+            // Virtual thread was interrupted during accept
+            if(isSocketException && Thread.currentThread().isInterrupted())
+                return;
+
+            LOGGER.error("Uncaught exception in accept loop", ex);
+
+            try {
+                if(onUnrecoverableException != null)
+                    onUnrecoverableException.close();
+            } catch (Throwable t) {
+                var th = Thread.currentThread();
+                th.getUncaughtExceptionHandler().uncaughtException(th, t);
+            }
         }
     }
 
     private void onNewConnection(CoordinatorSocketManager worker) throws IOException {
+        // TODO: receive with timeout
         try (var ctx = worker.receive(HelloPacket.class)) {
             var helloPkt = ctx.getPacket();
 
@@ -83,6 +135,9 @@ public final class WorkerManager implements Closeable {
             });
 
             workers.add(workerClient);
+        } catch (InterruptedIOException ex) {
+            worker.close();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -109,6 +164,14 @@ public final class WorkerManager implements Closeable {
 
     @Override
     public void close() throws IOException {
+        var acceptLoopTask = this.acceptLoopTask.get();
+        if(acceptLoopTask != null)
+            acceptLoopTask.cancel(true);
+
+        for (var t : waitHelloTasks) {
+            t.cancel(true);
+        }
+
         Closeables.closeAll(Stream.concat(
                         Stream.of(socket),
                         workers.stream().map(WorkerClient::getSocket)),

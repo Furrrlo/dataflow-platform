@@ -24,8 +24,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.sql.Connection;
@@ -166,26 +166,27 @@ class CoordinatorTest {
                 FILE_LOADER,
                 Parser.create("--language=es6"),
                 COORDINATOR_DFS,
-                WorkerManager.listen(IO_THREAD_POOL, port));
+                WorkerManager.listen(IO_THREAD_POOL, port, null));
 
         WORKERS = new ArrayList<>();
         for(PostgresWorker pgWorker : POSTGRES_WORKERS) {
             final var loopTaskRef = new AtomicReference<Future<?>>();
-            var worker = new Worker(
+            var worker = Worker.connect(
                     UUID.randomUUID(),
                     pgWorker.postgresNodeName(),
                     engineFactory.get(),
                     IO_THREAD_POOL, CPU_THREAD_POOL,
                     pgWorker.dfs(),
-                    new WorkerSocketManagerImpl(new Socket("localhost", port))) {
-                @Override
-                public void close() throws IOException {
-                    var loopTask = loopTaskRef.get();
-                    if(loopTask != null)
-                        loopTask.cancel(true);
-                    super.close();
-                }
-            };
+                    new InetSocketAddress("localhost", port),
+                    s -> new WorkerSocketManagerImpl(s) {
+                        @Override
+                        protected void doClose() throws IOException {
+                            var loopTask = loopTaskRef.get();
+                            if(loopTask != null)
+                                loopTask.cancel(true);
+                            super.doClose();
+                        }
+                    });
             WORKERS.add(worker);
             loopTaskRef.set(IO_THREAD_POOL.submit(() -> {
                 try {

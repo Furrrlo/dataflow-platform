@@ -34,6 +34,7 @@ public final class CoordinatorMain {
                 System.console().charset() :
                 StandardCharsets.UTF_8);
 
+        var mainThread = Thread.currentThread();
         var threadPool = Executors.newVirtualThreadPerTaskExecutor();
         try (var coordinator = new Coordinator(
                 fileLoader,
@@ -48,7 +49,7 @@ public final class CoordinatorMain {
                             ds.setDatabaseName("postgres");
                             config.setDataSource(ds);
                         }),
-                WorkerManager.listen(threadPool, 6666))
+                WorkerManager.listen(threadPool, 6666, mainThread::interrupt))
         ) {
             inputLoop(fileLoader, in, coordinator, LoggerFactory.getLogger(CoordinatorMain.class));
         } finally {
