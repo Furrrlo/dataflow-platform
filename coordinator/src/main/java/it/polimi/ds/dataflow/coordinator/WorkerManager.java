@@ -9,6 +9,8 @@ import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.util.HashSet;
 import java.util.List;
@@ -42,33 +44,45 @@ public final class WorkerManager implements Closeable {
         try {
             while (!Thread.interrupted()) {
                 CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, socket.accept());
-                try (var ctx = worker.receive(HelloPacket.class)) {
-                    var helloPkt = ctx.getPacket();
-
-                    var workerClient = new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName());
-                    worker.setOnClose(cls -> {
-                        try {
-                            cls.close();
-                        } finally {
-                            workers.remove(workerClient);
-                        }
-                    });
-
-                    var reconnectionFutures = new HashSet<>(this.reconnectionFutures);
-                    reconnectionFutures.forEach(f -> f.complete(workerClient));
-                    this.reconnectionFutures.removeAll(reconnectionFutures);
-
-                    helloPkt.previousJobs().forEach(job -> {
-                        var reconnectListeners = this.reconnectListeners.remove(new ReconnectListenerKey(
-                                helloPkt.uuid(), job.jobId(), job.partition()));
-                        reconnectListeners.forEach(Runnable::run);
-                    });
-
-                    workers.add(workerClient);
-                }
+                threadPool.execute(() -> {
+                    try {
+                        onNewConnection(worker);
+                    } catch (InterruptedIOException ex) {
+                        // Interrupted because close() was called
+                    } catch (IOException ex) {
+                        throw new UncheckedIOException(ex);
+                    }
+                });
             }
         } catch (IOException e) {
             // TODO: all should die in a sea of flames
+        }
+    }
+
+    private void onNewConnection(CoordinatorSocketManager worker) throws IOException {
+        try (var ctx = worker.receive(HelloPacket.class)) {
+            var helloPkt = ctx.getPacket();
+
+            var workerClient = new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName());
+            worker.setOnClose(cls -> {
+                try {
+                    cls.close();
+                } finally {
+                    workers.remove(workerClient);
+                }
+            });
+
+            var reconnectionFutures = new HashSet<>(this.reconnectionFutures);
+            reconnectionFutures.forEach(f -> f.complete(workerClient));
+            this.reconnectionFutures.removeAll(reconnectionFutures);
+
+            helloPkt.previousJobs().forEach(job -> {
+                var reconnectListeners = this.reconnectListeners.remove(new ReconnectListenerKey(
+                        helloPkt.uuid(), job.jobId(), job.partition()));
+                reconnectListeners.forEach(Runnable::run);
+            });
+
+            workers.add(workerClient);
         }
     }
 
