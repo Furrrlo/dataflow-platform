@@ -100,7 +100,7 @@ public final class Closeables {
         }
     }
 
-    @SuppressWarnings({"DataFlowIssue", "unchecked"})
+    @SuppressWarnings("unchecked")
     private static <E extends Exception> void doCloseAll(Stream<? extends AutoCloseable> closeables,
                                                          Function<? super @Nullable E, ? extends E> esf)
             throws E {
@@ -109,7 +109,7 @@ public final class Closeables {
         closeables.forEach(c -> {
             try {
                 c.close();
-            } catch (Throwable t) {
+            } catch (Exception t) {
                 exs.add((E) t);
             }
         });
