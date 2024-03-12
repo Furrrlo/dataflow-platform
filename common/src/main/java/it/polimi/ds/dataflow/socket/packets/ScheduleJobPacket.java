@@ -7,8 +7,8 @@ import java.util.List;
 public record ScheduleJobPacket(
         int jobId,
         List<Op> ops,
-        int partitions,
-        String dfsSrcFileName, int partition,
+        String dfsSrcFileName, int partitions, List<String> dfsSrcPartitionNames,
+        int partition,
         String dfsDstFileName
 ) implements CoordinatorRequestPacket {
 }

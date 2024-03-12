@@ -13,7 +13,7 @@ import static it.polimi.ds.dataflow.socket.packets.HelloPacket.PreviousJob;
 
 public interface WorkerDfs extends Dfs {
 
-    DfsFile findFile(String name, int partitions);
+    DfsFile findFile(String name, int partitions, Collection<String> allowedPartitionNames);
 
     @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition);
 

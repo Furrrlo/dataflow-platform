@@ -222,7 +222,10 @@ class PostgresCoordinatorDfsTest {
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException(STR."Missing node for partition \{partition}"));
 
-            var workerFile = worker.getDfs().findFile(partition.fileName(), coordinatorPartitions.size());
+            var workerFile = worker.getDfs().findFile(
+                    partition.fileName(),
+                    coordinatorPartitions.size(),
+                    coordinatorPartitions.stream().map(DfsFilePartitionInfo::partitionFileName).toList());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +
@@ -263,7 +266,10 @@ class PostgresCoordinatorDfsTest {
             if(worker == null)
                 continue;
 
-            var workerFile = worker.getDfs().findFile(partition.fileName(), coordinatorPartitionedFile.partitionsNum());
+            var workerFile = worker.getDfs().findFile(
+                    partition.fileName(),
+                    coordinatorPartitionedFile.partitionsNum(),
+                    coordinatorPartitionedFile.partitions().stream().map(DfsFilePartitionInfo::partitionFileName).toList());
             tuplesToWrite.forEach(t -> {
                 // the serde is sidestepped here, it just writes whatever json is in the key
                 var tuple = new Tuple2("{" +

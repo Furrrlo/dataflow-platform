@@ -28,6 +28,7 @@ import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.random.RandomGenerator;
 
 public class Coordinator implements Closeable {
@@ -127,7 +128,7 @@ public class Coordinator implements Closeable {
                                 .ifPresent(worker -> {
                                     remainingPartitions.remove(partition);
                                     scope.fork(() -> scheduleJobPartition(
-                                            jobId, worker, currOps, partition, dstDfsFileName, currDfsFile.partitionsNum()));
+                                            jobId, worker, currOps, currDfsFile, partition, dstDfsFileName));
                                 }));
                 // Rest of them
                 remainingPartitions.forEach(partition -> {
@@ -136,7 +137,7 @@ public class Coordinator implements Closeable {
                             .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs))
                             .orElseThrow(() -> new IllegalStateException("No nodes left to schedule stuff"));
                     scope.fork(() -> scheduleJobPartition(
-                            jobId, worker, currOps, partition, dstDfsFileName, currDfsFile.partitionsNum()));
+                            jobId, worker, currOps, currDfsFile, partition, dstDfsFileName));
                 });
 
                 dstPartitions = scope.join().result(IOException::new).stream()
@@ -194,18 +195,25 @@ public class Coordinator implements Closeable {
             int jobId,
             WorkerClient initialWorker,
             List<Op> ops,
-            DfsFilePartitionInfo partition,
-            String dstDfsFileName, int partitionsNum
+            DfsFile srcFile,
+            DfsFilePartitionInfo srcPartition,
+            String dstDfsFileName
     ) throws InterruptedException {
 
-        var pkt = new ScheduleJobPacket(jobId,
+        final Function<WorkerClient, ScheduleJobPacket> pktFactory = worker -> new ScheduleJobPacket(
+                jobId,
                 ops,
-                partitionsNum,
-                partition.fileName(), partition.partition(),
+                srcFile.name(),
+                srcFile.partitionsNum(),
+                srcFile.partitions().stream()
+                        .filter(p -> p.dfsNodeName().equals(worker.getDfsNodeName()))
+                        .map(DfsFilePartitionInfo::partitionFileName)
+                        .toList(),
+                srcPartition.partition(),
                 dstDfsFileName);
 
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>>()) {
-            scheduleJobPartitionInScope(scope, pkt, initialWorker, true);
+            scheduleJobPartitionInScope(scope, pktFactory, initialWorker, true);
 
             while (true) {
                 try {
@@ -216,32 +224,34 @@ public class Coordinator implements Closeable {
                 }
 
                 // If there's anybody not doing any work, make him work and get the result of whoever finishes first
-                findBestWorkerFor(partition.dfsNodeName(), IDLE_WORKER_THRESHOLD)
+                findBestWorkerFor(srcPartition.dfsNodeName(), IDLE_WORKER_THRESHOLD)
                         .ifPresent(freeWorker ->
-                                scheduleJobPartitionInScope(scope, pkt, freeWorker, false));
+                                scheduleJobPartitionInScope(scope, pktFactory, freeWorker, false));
             }
 
             return Objects.requireNonNull(
                     scope.result(IllegalStateException::new),
-                    "Scope result for partition " + partition + " is null");
+                    "Scope result for partition " + srcPartition + " is null");
         } finally {
-            workerManager.unregisterConsumersForJob(jobId, partition.partition());
+            workerManager.unregisterConsumersForJob(jobId, srcPartition.partition());
         }
     }
 
     @SuppressWarnings("resource")
     private void scheduleJobPartitionInScope(
             StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
-            ScheduleJobPacket pkt,
+            Function<WorkerClient, ScheduleJobPacket> pktFactory,
             WorkerClient worker,
             boolean reschedule
     ) {
+        var pkt = pktFactory.apply(worker);
+
         var unschedule = worker.scheduleJob(pkt.jobId(), pkt.partition());
         scope.fork(() -> {
             // If it disconnects and reconnects, we want to make it pick it up from where it left off
             workerManager.registerReconnectConsumerFor(
                     worker.getUuid(), pkt.jobId(), pkt.partition(),
-                    () -> scheduleJobPartitionInScope(scope, pkt, worker, false));
+                    () -> scheduleJobPartitionInScope(scope, pktFactory, worker, false));
 
             try (var _ = unschedule;
                  var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
@@ -285,7 +295,7 @@ public class Coordinator implements Closeable {
                         }
                     }
 
-                    scheduleJobPartitionInScope(scope, pkt, newWorker, true);
+                    scheduleJobPartitionInScope(scope, pktFactory, newWorker, true);
                 }
 
                 throw ex;
