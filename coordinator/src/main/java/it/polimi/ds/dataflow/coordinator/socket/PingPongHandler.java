@@ -2,6 +2,7 @@ package it.polimi.ds.dataflow.coordinator.socket;
 
 import it.polimi.ds.dataflow.socket.packets.PingPacket;
 import it.polimi.ds.dataflow.socket.packets.PongPacket;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -16,6 +17,7 @@ public class PingPongHandler implements Runnable {
 
     @Override
     @SuppressWarnings("BusyWait")
+    @SuppressFBWarnings("MDM_THREAD_YIELD")
     public void run() {
         try {
             while (!Thread.interrupted()) {

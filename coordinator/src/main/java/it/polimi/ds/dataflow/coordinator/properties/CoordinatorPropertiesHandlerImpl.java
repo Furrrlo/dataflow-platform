@@ -1,10 +1,9 @@
 package it.polimi.ds.dataflow.coordinator.properties;
 
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jasypt.encryption.pbe.StandardPBEStringEncryptor;
 import org.jasypt.properties.EncryptableProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -15,10 +14,10 @@ import java.util.Properties;
 
 
 public class CoordinatorPropertiesHandlerImpl implements CoordinatorPropertiesHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CoordinatorPropertiesHandlerImpl.class);
     private static final String DEFAULT_PROPERTIES_FILE_NAME = "coordinator.properties";
     private final Properties props;
 
+    @SuppressFBWarnings("HARD_CODE_PASSWORD")
     public CoordinatorPropertiesHandlerImpl(WorkDirFileLoader fileLoader) throws IOException {
         StandardPBEStringEncryptor encryptor = new StandardPBEStringEncryptor();
         encryptor.setPassword("jasypt");

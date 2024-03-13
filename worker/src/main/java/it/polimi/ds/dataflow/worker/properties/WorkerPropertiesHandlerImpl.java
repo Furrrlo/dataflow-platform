@@ -1,13 +1,13 @@
 package it.polimi.ds.dataflow.worker.properties;
 
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jasypt.encryption.pbe.StandardPBEStringEncryptor;
 import org.jasypt.properties.EncryptableProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,10 +16,11 @@ import java.util.Properties;
 import java.util.UUID;
 
 public final class WorkerPropertiesHandlerImpl implements WorkerPropertiesHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(WorkerPropertiesHandlerImpl.class);
+
     private final Path defaultPropertiesFilePath;
     private final Properties props;
 
+    @SuppressFBWarnings("HARD_CODE_PASSWORD")
     public WorkerPropertiesHandlerImpl(WorkDirFileLoader fileLoader) throws IOException {
         StandardPBEStringEncryptor encryptor = new StandardPBEStringEncryptor();
         encryptor.setPassword("jasypt");
@@ -31,6 +32,7 @@ public final class WorkerPropertiesHandlerImpl implements WorkerPropertiesHandle
     }
 
     @Override
+    @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CHECKED")
     public UUID getUuid() {
         UUID uuid;
         if (props.getProperty("UUID") != null && !props.getProperty("UUID").isEmpty()) {
@@ -41,8 +43,7 @@ public final class WorkerPropertiesHandlerImpl implements WorkerPropertiesHandle
             try (Writer w = Files.newBufferedWriter(defaultPropertiesFilePath, StandardCharsets.UTF_8)) {
                 props.store(w, null);
             } catch (IOException e) {
-                LOGGER.error("Couldn't save properties");
-                throw new RuntimeException(e);
+                throw new UncheckedIOException("Couldn't save properties", e);
             }
         }
         return uuid;

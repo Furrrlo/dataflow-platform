@@ -14,6 +14,7 @@
 
     <Match>
         <Bug pattern="
+      CE_CLASS_ENVY,
       CRLF_INJECTION_LOGS,
       CT_CONSTRUCTOR_THROW,
       DRE_DECLARED_RUNTIME_EXCEPTION,
