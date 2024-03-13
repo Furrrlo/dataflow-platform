@@ -114,8 +114,7 @@ public final class WorkerManager implements Closeable {
     }
 
     private void onNewConnection(CoordinatorSocketManager worker) throws IOException {
-        // TODO: receive with timeout
-        try (var ctx = worker.receive(HelloPacket.class)) {
+        try (var ctx = worker.receive(HelloPacket.class, 10, TimeUnit.SECONDS)) {
             var helloPkt = ctx.getPacket();
 
             var workerClient = new WorkerClient(worker, helloPkt.uuid(), helloPkt.dfsNodeName());
@@ -141,6 +140,8 @@ public final class WorkerManager implements Closeable {
         } catch (InterruptedIOException ex) {
             worker.close();
             Thread.currentThread().interrupt();
+        } catch (TimeoutException e) {
+            throw new IOException("Worker failed to send hello packet", e);
         }
     }
 

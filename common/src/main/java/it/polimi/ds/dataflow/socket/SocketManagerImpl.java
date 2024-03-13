@@ -315,6 +315,15 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
     }
 
     private SeqPacket doReceive(Predicate<SeqPacket> filter) throws InterruptedException, IOException {
+        try {
+            return doReceiveWithTimeout(filter, -1, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
+            throw new AssertionError("Should never happen, there's no timeout", ex);
+        }
+    }
+
+    private SeqPacket doReceiveWithTimeout(Predicate<SeqPacket> filter, int timeout, TimeUnit unit)
+            throws InterruptedException, IOException, TimeoutException {
         ensureOpen();
 
         if (!isRecvTaskRunning)
@@ -329,7 +338,9 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
             default -> res.skip();
         };
 
-        Object res = inPacketQueue.takeFirstMatching(cond);
+        Object res = timeout == -1
+                ? inPacketQueue.takeFirstMatching(cond)
+                : inPacketQueue.takeFirstMatching(cond, timeout, unit);
         return switch (res) {
             case SeqPacket pkt -> pkt;
             case Throwable t -> throw rethrowIOException(t, "Failed to receive packet");
@@ -385,6 +396,19 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         try {
             LOGGER.trace("[{}] Waiting for {}...", name, type);
             return new PacketReplyContextImpl<>(doReceive(packet -> type.isInstance(packet.packet())));
+        } catch (InterruptedException e) {
+            throw (IOException) new InterruptedIOException("Failed to receive packet " + type).initCause(e);
+        }
+    }
+
+    @Override
+    public <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type, int timeout, TimeUnit unit)
+            throws IOException, TimeoutException {
+        try {
+            LOGGER.trace("[{}] Waiting for {}...", name, type);
+            return new PacketReplyContextImpl<>(doReceiveWithTimeout(
+                    packet -> type.isInstance(packet.packet()),
+                    timeout, unit));
         } catch (InterruptedException e) {
             throw (IOException) new InterruptedIOException("Failed to receive packet " + type).initCause(e);
         }

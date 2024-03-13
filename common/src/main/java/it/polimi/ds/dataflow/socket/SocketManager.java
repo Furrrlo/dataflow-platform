@@ -7,6 +7,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Handle socket communication from multiple threads, using a queue.
@@ -61,6 +63,17 @@ public interface SocketManager<IN extends Packet, ACK_IN extends /* Packet & */ 
      * @throws InterruptedIOException if interrupted while receiving
      */
     <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type) throws IOException;
+
+    /**
+     * Wait for a packet of the given type
+     *
+     * @param type type of the Packet to wait for
+     * @return {@link PacketReplyContext} the context of the received packet
+     * @throws IOException if receiving fails
+     * @throws InterruptedIOException if interrupted while receiving
+     */
+    <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type, int timeout, TimeUnit unit)
+            throws IOException, TimeoutException;
 
     boolean isClosed();
 
