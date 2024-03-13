@@ -108,7 +108,7 @@ public final class Worker implements Closeable {
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions(), pkt.dfsSrcPartitionNames());
-            var restoredBackup = dfs.loadBackupInfo(pkt.jobId(), pkt.partition());
+            var restoredBackup = dfs.loadBackupInfo(pkt.jobId(), pkt.partition(), pkt.dfsDstFileName());
 
             // Create the partition in which we are going to put the results
             var dfsDstFilePartition = restoredBackup != null ?

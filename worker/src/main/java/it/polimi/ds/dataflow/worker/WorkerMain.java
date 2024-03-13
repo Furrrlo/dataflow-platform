@@ -23,9 +23,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
-@SuppressFBWarnings({
-        "HARD_CODE_PASSWORD" // TODO: load the credentials from somewhere
-})
 public final class WorkerMain {
 
     private WorkerMain() {

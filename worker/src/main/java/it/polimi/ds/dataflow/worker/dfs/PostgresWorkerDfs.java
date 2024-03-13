@@ -109,29 +109,42 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     }
 
     @Override
-    public @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition) {
-        return null; // TODO:
+    public @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition, String dfsDstFileName) {
+        return ctx.select(DATAFLOW_JOBS.DSTFILEPARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
+                .from(DATAFLOW_JOBS)
+                .where(DATAFLOW_JOBS.JOBID.eq(jobId).and(DATAFLOW_JOBS.PARTITION.eq(partition)).and(DATAFLOW_JOBS.WORKER.eq(uuid)))
+                .fetchOptional()
+                .map(result -> new RestoredBackupInfo(
+                        jobId,
+                        partition,
+                        new DfsFilePartitionInfo(
+                                dfsDstFileName,
+                                result.get(DATAFLOW_JOBS.DSTFILEPARTITION),
+                                partition,
+                                LOCAL_DFS_NODE_NAME,
+                                true),
+                        result.get(DATAFLOW_JOBS.NEXTBATCHPTR)))
+                .orElse(null);
+    }
+
+    private void doWriteBackupInfo(DSLContext ctx,
+                                   int jobId,
+                                   int partition,
+                                   DfsFilePartitionInfo dstFilePartition,
+                                   @Nullable Integer nextBatchPtr) {
+        ctx.insertInto(DATAFLOW_JOBS)
+                .columns(DATAFLOW_JOBS.WORKER, DATAFLOW_JOBS.JOBID, DATAFLOW_JOBS.PARTITION, DATAFLOW_JOBS.DSTFILEPARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
+                .values(uuid, jobId, partition, dstFilePartition.partitionFileName(), nextBatchPtr)
+                .onConflictOnConstraint(Keys.UNIQUE_CNSTR_DATAFLOW_JOBS)
+                .doUpdate()
+                .set(DATAFLOW_JOBS.NEXTBATCHPTR, nextBatchPtr)
+                .set(DATAFLOW_JOBS.DSTFILEPARTITION, dstFilePartition.partitionFileName())
+                .execute();
     }
 
     @Override
     public void writeBackupInfo(int jobId, int partition, DfsFilePartitionInfo dstFilePartition, @Nullable Integer nextBatchPtr) {
         doWriteBackupInfo(ctx, jobId, partition, dstFilePartition, nextBatchPtr);
-    }
-
-    @SuppressFBWarnings("UP_UNUSED_PARAMETER") // TODO: save this
-    private void doWriteBackupInfo(DSLContext ctx,
-                                   int jobId,
-                                   int partition,
-                                   @SuppressWarnings("unused")
-                                   DfsFilePartitionInfo dstFilePartition, // TODO: save this
-                                   @Nullable Integer nextBatchPtr) {
-        ctx.insertInto(DATAFLOW_JOBS)
-                .columns(DATAFLOW_JOBS.WORKER, DATAFLOW_JOBS.JOBID, DATAFLOW_JOBS.PARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
-                .values(uuid, jobId, partition, nextBatchPtr)
-                .onConflictOnConstraint(Keys.UNIQUE_CNSTR_DATAFLOW_JOBS)
-                .doUpdate()
-                .set(DATAFLOW_JOBS.NEXTBATCHPTR, nextBatchPtr)
-                .execute();
     }
 
     @Override

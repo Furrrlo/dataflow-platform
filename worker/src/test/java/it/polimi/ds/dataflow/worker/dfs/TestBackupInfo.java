@@ -23,14 +23,14 @@ public record TestBackupInfo(
     }
 
     public static Stream<TestBackupInfo> loadAllFrom(DSLContext ctx) {
-        return ctx.select(DATAFLOW_JOBS.WORKER, DATAFLOW_JOBS.JOBID, DATAFLOW_JOBS.PARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
+        return ctx.select(DATAFLOW_JOBS.WORKER, DATAFLOW_JOBS.JOBID, DATAFLOW_JOBS.PARTITION, DATAFLOW_JOBS.DSTFILEPARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
                 .from(DATAFLOW_JOBS)
                 .stream()
                 .map(r -> new TestBackupInfo(
                         r.get(DATAFLOW_JOBS.WORKER),
                         r.get(DATAFLOW_JOBS.JOBID),
                         r.get(DATAFLOW_JOBS.PARTITION),
-                        "", // TODO
+                        r.get(DATAFLOW_JOBS.DSTFILEPARTITION),
                         r.get(DATAFLOW_JOBS.NEXTBATCHPTR)
                 ));
     }

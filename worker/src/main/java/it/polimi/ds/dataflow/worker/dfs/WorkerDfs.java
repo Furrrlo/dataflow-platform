@@ -15,7 +15,7 @@ public interface WorkerDfs extends Dfs {
 
     DfsFile findFile(String name, int partitions, Collection<String> allowedPartitionNames);
 
-    @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition);
+    @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition, String dfsDstFileName);
 
     void writeBackupInfo(int jobId, int partition, DfsFilePartitionInfo dstFilePartition, @Nullable Integer nextBatchPtr);
 

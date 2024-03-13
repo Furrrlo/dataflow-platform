@@ -69,7 +69,6 @@ class PostgresWorkerDfsTest {
     }
 
     @Test
-    @Disabled // TODO: re-enable when writeBackupInfo is fixed
     void createAndInsertAndUpdateBackupFile() throws IOException, SQLException {
         // Initializing a bunch of UUIDs
         var uuids = List.of(UUID.randomUUID(),
