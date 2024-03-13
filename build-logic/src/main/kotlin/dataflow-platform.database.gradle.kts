@@ -71,6 +71,13 @@ jooq {
     }
 }
 
+tasks.jooqCodegen {
+    inputs.files(project
+        .fileTree("src/main/resources/it/polimi/ds/dataflow/worker/dfs") {
+            include("changelog-*.xml")
+        })
+}
+
 tasks.compileJava {
     dependsOn(tasks.named("jooqCodegen"))
 }
