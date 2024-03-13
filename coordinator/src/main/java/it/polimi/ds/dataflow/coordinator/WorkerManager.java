@@ -2,7 +2,9 @@ package it.polimi.ds.dataflow.coordinator;
 
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManagerImpl;
+import it.polimi.ds.dataflow.coordinator.socket.PingPongHandler;
 import it.polimi.ds.dataflow.socket.packets.HelloPacket;
+import it.polimi.ds.dataflow.socket.packets.PingPacket;
 import it.polimi.ds.dataflow.utils.Closeables;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.jetbrains.annotations.Unmodifiable;
@@ -32,7 +34,7 @@ public final class WorkerManager implements Closeable {
     private final @Nullable AutoCloseable onUnrecoverableException;
 
     private final Supplier<@Nullable Future<?>> acceptLoopTask;
-    private final Collection<Future<?>> waitHelloTasks = ConcurrentHashMap.newKeySet();
+    private final Collection<Future<?>> workersTasks = ConcurrentHashMap.newKeySet();
 
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
@@ -72,7 +74,8 @@ public final class WorkerManager implements Closeable {
                 }
 
                 CoordinatorSocketManager worker = new CoordinatorSocketManagerImpl(threadPool, workerSocket);
-                // TODO: set socket timeout & start ping-pong
+                workerSocket.setSoTimeout(PingPacket.TIMEOUT_MILLIS);
+                workersTasks.add(threadPool.submit(new PingPongHandler(worker)));
 
                 var helloTaskRef = new AtomicReference<Future<?>>();
                 var task = threadPool.submit(() -> {
@@ -83,11 +86,11 @@ public final class WorkerManager implements Closeable {
                     } finally {
                         var helloTask = helloTaskRef.get();
                         if(helloTask != null)
-                            waitHelloTasks.remove(helloTask);
+                            workersTasks.remove(helloTask);
                     }
                 });
                 helloTaskRef.set(task);
-                waitHelloTasks.add(task);
+                workersTasks.add(task);
             }
         } catch (ClosedByInterruptException ex) {
             Thread.currentThread().interrupt();
@@ -168,7 +171,7 @@ public final class WorkerManager implements Closeable {
         if(acceptLoopTask != null)
             acceptLoopTask.cancel(true);
 
-        for (var t : waitHelloTasks) {
+        for (var t : workersTasks) {
             t.cancel(true);
         }
 

@@ -40,6 +40,7 @@ public final class Worker implements Closeable {
         var socket = new Socket(addr.getAddress(), addr.getPort());
         try {
             var socketMngr = socketFactory.apply(socket);
+            socket.setSoTimeout(PingPacket.TIMEOUT_MILLIS);
             socketMngr.send(new HelloPacket(uuid, dfsNodeName, dfs.readWorkerJobs()));
             return new Worker(engine, ioThreadPool, cpuThreadPool, dfs, socketMngr);
 
@@ -83,6 +84,7 @@ public final class Worker implements Closeable {
                     ctx.reply(switch (ctx.getPacket()) {
                         case ScheduleJobPacket pkt -> onScheduleJob(pkt);
                         case CreateFilePartitionPacket pkt -> onCreateFilePartition(pkt);
+                        case PingPacket _ -> new PongPacket();
                     });
                 } catch (IOException e) {
                     // If it's an unrecoverable failure, the next socket.receive() call is gonna blow up anyway
