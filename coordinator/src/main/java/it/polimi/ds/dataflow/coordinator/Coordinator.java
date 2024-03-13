@@ -47,13 +47,12 @@ public class Coordinator implements Closeable {
 
     public Coordinator(WorkDirFileLoader fileLoader,
                        Parser parser,
-                       CoordinatorDfs dfs,
-                       WorkerManager workerManager) {
+                       WorkerManager workerManager,
+                       CoordinatorDfs dfs) {
         this.fileLoader = fileLoader;
         this.parser = parser;
         this.dfs = dfs;
         this.workerManager = workerManager;
-        this.workerManager.registerForeignServersUpdater(this.dfs::addForeignServer);
     }
 
     @Override

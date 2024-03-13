@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -81,9 +82,11 @@ class PostgresCoordinatorDfsTest {
             }
         };
 
+        var addForeignServerRef = new AtomicReference<Consumer<String>>();
         COORDINATOR_DFS = new PostgresCoordinatorDfs(
                 serde,
-                config -> config.setDataSource(createDataSourceFor(COORDINATOR_NODE)));
+                config -> config.setDataSource(createDataSourceFor(COORDINATOR_NODE)),
+                addForeignServerRef::set);
 
         record TempWorker(String name, PostgreSQLContainer<?> container, Consumer<PostgresWorker> workerSetter) {
         }
@@ -98,7 +101,7 @@ class PostgresCoordinatorDfsTest {
                     config -> config.setDataSource(ds)));
         }).toList();
 
-        WORKERS.forEach(w -> COORDINATOR_DFS.addForeignServer(w.postgresNodeName()));
+        WORKERS.forEach(w -> addForeignServerRef.get().accept(w.postgresNodeName()));
 
         try(Connection connection = createDataSourceFor(COORDINATOR_NODE).getConnection();
             Statement statement = connection.createStatement()) {

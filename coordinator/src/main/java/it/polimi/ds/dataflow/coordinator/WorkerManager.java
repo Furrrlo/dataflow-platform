@@ -40,7 +40,7 @@ public final class WorkerManager implements Closeable {
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
     private final Set<CompletableFuture<WorkerClient>> reconnectionFutures = ConcurrentHashMap.newKeySet();
-    private volatile Consumer<String> foreignServersUpdater;
+    private volatile @Nullable Consumer<String> foreignServersUpdater;
 
     public static WorkerManager listen(ExecutorService threadPool,
                                        int port,
@@ -138,9 +138,12 @@ public final class WorkerManager implements Closeable {
                 reconnectListeners.forEach(Runnable::run);
             });
 
+            // Updating the foreign servers connect to the coordinator's DFS instance
+            var foreignServersUpdater = this.foreignServersUpdater;
+            if(foreignServersUpdater != null)
+                foreignServersUpdater.accept(workerClient.getDfsNodeName());
+
             workers.add(workerClient);
-            //Updating the foreign servers connect to the coordinator's DFS istance
-            this.foreignServersUpdater.accept(workerClient.getDfsNodeName());
         } catch (InterruptedIOException ex) {
             worker.close();
             Thread.currentThread().interrupt();

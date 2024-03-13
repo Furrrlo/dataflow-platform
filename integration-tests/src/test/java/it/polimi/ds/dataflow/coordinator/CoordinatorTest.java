@@ -97,9 +97,20 @@ class CoordinatorTest {
         final Supplier<ScriptEngine> engineFactory = () -> new NashornScriptEngineFactory()
                 .getScriptEngine("--language=es6", "-doe");
 
-        COORDINATOR_DFS = new PostgresCoordinatorDfs(
-                engineFactory.get(),
-                config -> config.setDataSource(createDataSourceFor(COORDINATOR_NODE)));
+        int port;
+        try(ServerSocket socket = new ServerSocket(0)) {
+            port = socket.getLocalPort();
+        }
+
+        WorkerManager workerManager;
+        COORDINATOR = new Coordinator(
+                FILE_LOADER,
+                Parser.create("--language=es6"),
+                workerManager = WorkerManager.listen(IO_THREAD_POOL, port, null),
+                COORDINATOR_DFS = new PostgresCoordinatorDfs(
+                        engineFactory.get(),
+                        config -> config.setDataSource(createDataSourceFor(COORDINATOR_NODE)),
+                        workerManager::registerForeignServersUpdater));
 
         POSTGRES_WORKERS = new ArrayList<>();
         for (var e : Map.of(
@@ -119,8 +130,6 @@ class CoordinatorTest {
                             config -> config.setDataSource(ds))));
         }
         POSTGRES_WORKERS = List.copyOf(POSTGRES_WORKERS);
-        // TODO: remove this, shouldn't be needed
-        POSTGRES_WORKERS.forEach(w -> COORDINATOR_DFS.addForeignServer(w.postgresNodeName()));
 
         try(Connection connection = createDataSourceFor(COORDINATOR_NODE).getConnection();
             Statement statement = connection.createStatement()) {
@@ -156,17 +165,6 @@ class CoordinatorTest {
                     """);
             }
         }
-
-        int port;
-        try(ServerSocket socket = new ServerSocket(0)) {
-            port = socket.getLocalPort();
-        }
-
-        COORDINATOR = new Coordinator(
-                FILE_LOADER,
-                Parser.create("--language=es6"),
-                COORDINATOR_DFS,
-                WorkerManager.listen(IO_THREAD_POOL, port, null));
 
         WORKERS = new ArrayList<>();
         for(PostgresWorker pgWorker : POSTGRES_WORKERS) {

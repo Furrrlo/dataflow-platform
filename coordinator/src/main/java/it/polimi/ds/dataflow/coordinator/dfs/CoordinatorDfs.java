@@ -21,6 +21,4 @@ public interface CoordinatorDfs extends Dfs {
     @MustBeClosed Stream<Tuple2> loadAll(DfsFile file);
 
     void reshuffle(DfsFile file);
-
-    void addForeignServer(String foreignServer);
 }

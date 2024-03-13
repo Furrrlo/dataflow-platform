@@ -9,7 +9,6 @@ import it.polimi.ds.dataflow.dfs.PostgresDfs;
 import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import it.polimi.ds.dataflow.utils.FastIllegalStateException;
 import org.jetbrains.annotations.Unmodifiable;
-import org.jetbrains.annotations.VisibleForTesting;
 import org.jooq.impl.SQLDataType;
 
 import javax.script.ScriptEngine;
@@ -29,18 +28,24 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     private final Set<String> foreignServers = ConcurrentHashMap.newKeySet();
 
     public PostgresCoordinatorDfs(Tuple2JsonSerde serde,
-                                  Consumer<HikariConfig> configurator) {
+                                  Consumer<HikariConfig> configurator,
+                                  ForeignServerRegistrar foreignServerRegistrar) {
         super(serde, configurator);
+        foreignServerRegistrar.accept(foreignServers::add);
     }
 
-    public PostgresCoordinatorDfs(ScriptEngine engine, Consumer<HikariConfig> configurator) throws ScriptException {
+    public PostgresCoordinatorDfs(ScriptEngine engine,
+                                  Consumer<HikariConfig> configurator,
+                                  ForeignServerRegistrar foreignServerRegistrar) throws ScriptException {
         super(engine, configurator);
+        foreignServerRegistrar.accept(foreignServers::add);
     }
 
-    @VisibleForTesting // TODO: make this not public, but package private
-    @Override
-    public void addForeignServer(String foreignServer) {
-        foreignServers.add(foreignServer);
+    @FunctionalInterface
+    public interface ForeignServerRegistrar extends Consumer<Consumer<String>> {
+
+        @Override
+        void accept(Consumer<String> registerForeignServer);
     }
 
     @Override
