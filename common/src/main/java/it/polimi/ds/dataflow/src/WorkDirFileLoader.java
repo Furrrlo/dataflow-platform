@@ -48,7 +48,7 @@ public class WorkDirFileLoader {
 
     /**
      * @param path path of the file we want
-     * @return
+     * @return the resolved path, relative to the working directory
      */
     public Path resolvePath(String path) {
         return ensureNoFileTraversal(path);
