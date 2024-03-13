@@ -82,7 +82,11 @@ pmd {
 configurations.pmd { attributes.attribute(pmdPreviewAttr, true) }
 
 tasks.withType<JavaCompile> {
+    val isTestTask = name == "compileTestJava"
     options.compilerArgs.addAll(listOf("-Xmaxerrs", "2000", "-Xmaxwarns", "2000"))
+
+    if(!isTestTask && !skipErrorprone)
+        options.compilerArgs.add("-Werror")
 
     val objToString: (Any?) -> String? = { json: Any? ->
         if (json is String)
@@ -118,7 +122,6 @@ tasks.withType<JavaCompile> {
         if(errorpronePatternsFile.exists()) {
             val patterns = JsonSlurper().parseText(errorpronePatternsFile.readText()) as Map<*, *>
             // Patterns disabled in tests, 'cause it's not production code so some don't make sense
-            val isTestTask = name == "compileTestJava"
             val patternsDisabledInTests =
                 (patterns["disableInTests"] as Collection<*>?)?.mapNotNull(objToString)?.toSet() ?: emptySet()
             val filterPatterns: (String) -> Boolean = { s -> !isTestTask || !patternsDisabledInTests.contains(s) }
