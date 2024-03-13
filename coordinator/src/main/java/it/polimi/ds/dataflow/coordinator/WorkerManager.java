@@ -21,6 +21,7 @@ import java.nio.channels.ClosedByInterruptException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -39,6 +40,7 @@ public final class WorkerManager implements Closeable {
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
     private final Set<CompletableFuture<WorkerClient>> reconnectionFutures = ConcurrentHashMap.newKeySet();
+    private volatile Consumer<String> foreignServersUpdater;
 
     public static WorkerManager listen(ExecutorService threadPool,
                                        int port,
@@ -137,6 +139,8 @@ public final class WorkerManager implements Closeable {
             });
 
             workers.add(workerClient);
+            //Updating the foreign servers connect to the coordinator's DFS istance
+            this.foreignServersUpdater.accept(workerClient.getDfsNodeName());
         } catch (InterruptedIOException ex) {
             worker.close();
             Thread.currentThread().interrupt();
@@ -150,6 +154,10 @@ public final class WorkerManager implements Closeable {
                 new ReconnectListenerKey(worker, jobId, partition),
                 _ -> ConcurrentHashMap.newKeySet()
         ).add(runnable);
+    }
+
+    public void registerForeignServersUpdater(Consumer<String> consumer) {
+        this.foreignServersUpdater = consumer;
     }
 
     public Future<WorkerClient> waitForAnyReconnections() {
