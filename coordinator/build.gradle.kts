@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation(projects.common)
+    implementation(libs.jasypt)
 
     testImplementation(testFixtures(projects.common))
 }

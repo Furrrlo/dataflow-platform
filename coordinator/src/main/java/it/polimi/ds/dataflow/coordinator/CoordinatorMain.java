@@ -1,6 +1,8 @@
 package it.polimi.ds.dataflow.coordinator;
 
 import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
+import it.polimi.ds.dataflow.coordinator.properties.CoordinatorPropertiesHandler;
+import it.polimi.ds.dataflow.coordinator.properties.CoordinatorPropertiesHandlerImpl;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
@@ -19,17 +21,15 @@ import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
 
-@SuppressFBWarnings({
-        "HARD_CODE_PASSWORD" // TODO: load the credentials from somewhere
-})
+
 public final class CoordinatorMain {
 
     private CoordinatorMain() {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException, ScriptException {
-
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
+        final CoordinatorPropertiesHandler propsHndl = new CoordinatorPropertiesHandlerImpl(fileLoader);
         final Scanner in = new Scanner(System.in, System.console() != null ?
                 System.console().charset() :
                 StandardCharsets.UTF_8);
@@ -43,13 +43,12 @@ public final class CoordinatorMain {
                         new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
                         config -> {
                             PGSimpleDataSource ds = new PGSimpleDataSource();
-                            ds.setServerNames(new String[]{"localhost"});
-                            ds.setUser("postgres");
-                            ds.setPassword("password");
-                            ds.setDatabaseName("postgres");
+                            ds.setUrl(propsHndl.getPgUrl());
+                            ds.setUser(propsHndl.getPgUser());
+                            ds.setPassword(propsHndl.getPgPassword());
                             config.setDataSource(ds);
                         }),
-                WorkerManager.listen(threadPool, 6666, mainThread::interrupt))
+                WorkerManager.listen(threadPool, propsHndl.getListeningPort(), mainThread::interrupt))
         ) {
             inputLoop(fileLoader, in, coordinator, LoggerFactory.getLogger(CoordinatorMain.class));
         } finally {

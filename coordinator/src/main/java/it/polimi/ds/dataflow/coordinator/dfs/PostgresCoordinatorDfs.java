@@ -38,6 +38,7 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     }
 
     @VisibleForTesting // TODO: make this not public, but package private
+    @Override
     public void addForeignServer(String foreignServer) {
         foreignServers.add(foreignServer);
     }
