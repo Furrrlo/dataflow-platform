@@ -75,7 +75,7 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
             Database database = DatabaseFactory.getInstance()
                     .findCorrectDatabaseImplementation(new JdbcConnection(dataSource.getConnection()));
             return new Liquibase(
-                    getClass().getPackageName().replace('.', '/') + "/changelog-root.xml",
+                    PostgresWorkerDfs.class.getPackageName().replace('.', '/') + "/changelog-root.xml",
                     resourceAccessor, database);
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to create Liquibase object", ex);
