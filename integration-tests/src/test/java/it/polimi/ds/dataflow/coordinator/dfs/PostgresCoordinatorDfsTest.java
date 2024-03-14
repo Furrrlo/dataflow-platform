@@ -142,7 +142,7 @@ class PostgresCoordinatorDfsTest {
     @AfterAll
     static void tearDown() throws Exception {
         Closeables.Auto.closeAll(Stream.concat(
-                WORKERS.stream().map(PostgresWorker::container),
+                WORKERS.stream(),
                 Stream.of(COORDINATOR_NODE, NETWORK)),
                 e -> new Exception("Failed to tear down stuff", e));
     }

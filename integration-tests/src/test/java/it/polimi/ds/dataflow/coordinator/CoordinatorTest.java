@@ -205,7 +205,7 @@ class CoordinatorTest {
     static void tearDown() throws Exception {
         try(var _ = Closeables.Auto.compose(Stream.concat(Stream.concat(
                                 WORKERS.stream(),
-                                POSTGRES_WORKERS.stream().map(PostgresWorker::container)),
+                                POSTGRES_WORKERS.stream()),
                         Stream.of(COORDINATOR, COORDINATOR_NODE, NETWORK)),
                 e -> new Exception("Failed to tearDown", e)
         )) {
