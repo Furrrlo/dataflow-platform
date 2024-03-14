@@ -9,14 +9,18 @@ import it.polimi.ds.dataflow.utils.SimpleScriptEngineFactory;
 import it.polimi.ds.dataflow.utils.ThreadPools;
 import it.polimi.ds.dataflow.worker.dfs.WorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManager;
+import org.jspecify.annotations.Nullable;
+import org.openjdk.nashorn.api.scripting.NashornException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
 public final class Worker implements Closeable {
@@ -29,6 +33,8 @@ public final class Worker implements Closeable {
     private final WorkerDfs dfs;
     private final WorkerSocketManager socket;
 
+    private volatile @Nullable SimulateCrashException simulatedCrash;
+
     public static Worker connect(UUID uuid,
                                  String dfsNodeName,
                                  SimpleScriptEngineFactory engineFactory0,
@@ -37,6 +43,17 @@ public final class Worker implements Closeable {
                                  WorkerDfs dfs,
                                  InetSocketAddress addr,
                                  IoFunction<Socket, WorkerSocketManager> socketFactory) throws IOException {
+        SimpleScriptEngineFactory engineFactory = () -> {
+            var engine = engineFactory0.create();
+            engine.put("simulateCrash", engine.eval(STR."""
+                    (function() {
+                        let SimulateCrashException = Java.type("\{SimulateCrashException.class.getName()}");
+                        return function() { throw new SimulateCrashException(); };
+                    })();
+                    """));
+            return engine;
+        };
+
         var socket = new Socket(addr.getAddress(), addr.getPort());
         try {
             var socketMngr = socketFactory.apply(socket);
@@ -76,24 +93,45 @@ public final class Worker implements Closeable {
         }
     }
 
-    public void loop() throws IOException {
-        while (!Thread.interrupted()) {
-            var ctx0 = socket.receive(CoordinatorRequestPacket.class);
-            ioThreadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
-                try (var ctx = ctx0) {
-                    ctx.reply(switch (ctx.getPacket()) {
-                        case ScheduleJobPacket pkt -> onScheduleJob(pkt);
-                        case CreateFilePartitionPacket pkt -> onCreateFilePartition(pkt);
-                        case PingPacket _ -> new PongPacket();
-                    });
-                } catch (IOException e) {
-                    // If it's an unrecoverable failure, the next socket.receive() call is gonna blow up anyway
-                    // No need to make everything die here, we can just log and go on
-                    LOGGER.error("Failed to send reply to coordinator", e);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }));
+    public void loop() throws IOException, InterruptedException {
+        var loopThread = Thread.currentThread();
+        SimulateCrashException simulatedCrash;
+        try {
+            while (!Thread.interrupted()) {
+                var ctx0 = socket.receive(CoordinatorRequestPacket.class);
+
+                ioThreadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
+                    try (var ctx = ctx0) {
+                        ctx.reply(switch (ctx.getPacket()) {
+                            case ScheduleJobPacket pkt -> onScheduleJob(pkt);
+                            case CreateFilePartitionPacket pkt -> onCreateFilePartition(pkt);
+                            case PingPacket _ -> new PongPacket();
+                        });
+                    } catch (IOException e) {
+                        // If it's an unrecoverable failure, the next socket.receive() call is gonna blow up anyway
+                        // No need to make everything die here, we can just log and go on
+                        LOGGER.error("Failed to send reply to coordinator", e);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } catch (SimulateCrashException e) {
+                        Thread.currentThread().interrupt();
+                        this.simulatedCrash = e;
+                        loopThread.interrupt();
+                    }
+                }));
+            }
+
+            simulatedCrash = this.simulatedCrash;
+        } catch (InterruptedIOException ex) {
+            simulatedCrash = this.simulatedCrash;
+            if(simulatedCrash == null)
+                throw (InterruptedException) new InterruptedException().initCause(ex);
+        }
+
+        this.simulatedCrash = null;
+        if(simulatedCrash != null) {
+            @SuppressWarnings("unused") var unused = Thread.interrupted(); // Clear interrupt flag
+            throw new SimulateCrashException(simulatedCrash);
         }
     }
 
@@ -149,8 +187,14 @@ public final class Worker implements Closeable {
 
             return new JobSuccessPacket(dfsDstFilePartition.partitionFileName());
 
-        } catch (InterruptedException ex) {
+        } catch (InterruptedException | SimulateCrashException ex) {
             throw ex;
+        } catch (ExecutionException ex) {
+            if(ex.getCause() instanceof NashornException jsException &&
+                    jsException.getCause() instanceof SimulateCrashException simulateEx)
+                throw simulateEx;
+
+            return new JobFailurePacket(ex);
         } catch (Exception ex) {
             return new JobFailurePacket(ex);
         }
