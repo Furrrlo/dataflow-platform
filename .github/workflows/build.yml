@@ -20,6 +20,11 @@ jobs:
 
   test:
     name: test
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
     runs-on: ubuntu-latest
     env:
       JAVA_VERSION: 21
@@ -32,3 +37,8 @@ jobs:
           java: ${{ env.JAVA_VERSION }}
           token: ${{ secrets.GITHUB_TOKEN }}
           arguments: check -PskipErrorprone
+      - name: Publish results
+        uses: EnricoMi/publish-unit-test-result-action@f355d34d53ad4e7f506f699478db2dd71da9de5f # v2.15.1
+        if: always()
+        with:
+          files: "**/test-results/**/*.xml"
