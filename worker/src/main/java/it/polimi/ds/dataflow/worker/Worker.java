@@ -5,13 +5,13 @@ import it.polimi.ds.dataflow.js.CompiledProgram;
 import it.polimi.ds.dataflow.js.Program;
 import it.polimi.ds.dataflow.socket.packets.*;
 import it.polimi.ds.dataflow.utils.IoFunction;
+import it.polimi.ds.dataflow.utils.SimpleScriptEngineFactory;
 import it.polimi.ds.dataflow.utils.ThreadPools;
 import it.polimi.ds.dataflow.worker.dfs.WorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.script.ScriptEngine;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -23,7 +23,7 @@ public final class Worker implements Closeable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Worker.class);
 
-    private final ScriptEngine engine;
+    private final SimpleScriptEngineFactory engineFactory;
     private final ExecutorService ioThreadPool;
     private final ExecutorService cpuThreadPool;
     private final WorkerDfs dfs;
@@ -31,7 +31,7 @@ public final class Worker implements Closeable {
 
     public static Worker connect(UUID uuid,
                                  String dfsNodeName,
-                                 ScriptEngine engine,
+                                 SimpleScriptEngineFactory engineFactory0,
                                  ExecutorService ioThreadPool,
                                  ExecutorService cpuThreadPool,
                                  WorkerDfs dfs,
@@ -42,7 +42,7 @@ public final class Worker implements Closeable {
             var socketMngr = socketFactory.apply(socket);
             socket.setSoTimeout(PingPacket.TIMEOUT_MILLIS);
             socketMngr.send(new HelloPacket(uuid, dfsNodeName, dfs.readWorkerJobs()));
-            return new Worker(engine, ioThreadPool, cpuThreadPool, dfs, socketMngr);
+            return new Worker(engineFactory, ioThreadPool, cpuThreadPool, dfs, socketMngr);
 
         } catch (Throwable t) {
             try {
@@ -55,12 +55,12 @@ public final class Worker implements Closeable {
         }
     }
 
-    private Worker(ScriptEngine engine,
+    private Worker(SimpleScriptEngineFactory engineFactory,
                    ExecutorService ioThreadPool,
                    ExecutorService cpuThreadPool,
                    WorkerDfs dfs,
                    WorkerSocketManager socket) {
-        this.engine = engine;
+        this.engineFactory = engineFactory;
         this.ioThreadPool = ioThreadPool;
         this.cpuThreadPool = cpuThreadPool;
         this.dfs = dfs;
@@ -109,6 +109,7 @@ public final class Worker implements Closeable {
      */
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
         try {
+            var engine = engineFactory.create();
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions(), pkt.dfsSrcPartitionNames());
             var restoredBackup = dfs.loadBackupInfo(pkt.jobId(), pkt.partition(), pkt.dfsDstFileName());
 

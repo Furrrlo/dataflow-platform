@@ -93,9 +93,10 @@ class CoordinatorTest {
 
     @BeforeAll
     @SuppressWarnings({"SqlResolve", "TrailingWhitespacesInTextBlock"})
-    static void beforeAll() throws SQLException, ScriptException, IOException {
-        final Supplier<ScriptEngine> engineFactory = () -> new NashornScriptEngineFactory()
-                .getScriptEngine("--language=es6", "-doe");
+    static void beforeAll() throws Exception {
+        final SimpleScriptEngineFactory engineFactory = SimpleScriptEngineFactory.wrap(
+                new NashornScriptEngineFactory(),
+                f -> f.getScriptEngine("--language=es6", "-doe"));
 
         int port;
         try(ServerSocket socket = new ServerSocket(0)) {
@@ -108,7 +109,7 @@ class CoordinatorTest {
                 Parser.create("--language=es6"),
                 workerManager = WorkerManager.listen(IO_THREAD_POOL, port, null),
                 COORDINATOR_DFS = new PostgresCoordinatorDfs(
-                        engineFactory.get(),
+                        engineFactory.create(),
                         config -> config.setDataSource(createDataSourceFor(COORDINATOR_NODE)),
                         workerManager::registerForeignServersUpdater));
 
@@ -124,7 +125,7 @@ class CoordinatorTest {
             POSTGRES_WORKERS.add(new PostgresWorker(
                     name, container, ds,
                     new PostgresWorkerDfs(
-                            engineFactory.get(),
+                            engineFactory.create(),
                             "coordinator",
                             UUID.randomUUID(),
                             config -> config.setDataSource(ds))));
@@ -172,7 +173,7 @@ class CoordinatorTest {
             var worker = Worker.connect(
                     UUID.randomUUID(),
                     pgWorker.postgresNodeName(),
-                    engineFactory.get(),
+                    engineFactory,
                     IO_THREAD_POOL, CPU_THREAD_POOL,
                     pgWorker.dfs(),
                     new InetSocketAddress("localhost", port),

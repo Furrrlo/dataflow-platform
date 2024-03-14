@@ -1,6 +1,7 @@
 package it.polimi.ds.dataflow.worker;
 
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.SimpleScriptEngineFactory;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import it.polimi.ds.dataflow.worker.dfs.PostgresWorkerDfs;
 import it.polimi.ds.dataflow.worker.properties.WorkerPropertiesHandlerImpl;
@@ -8,7 +9,6 @@ import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.postgresql.ds.PGSimpleDataSource;
 
-import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -22,7 +22,7 @@ public final class WorkerMain {
     }
 
     @SuppressFBWarnings("HES_LOCAL_EXECUTOR_SERVICE")
-    public static void main(String[] args) throws IOException, ScriptException {
+    public static void main(String[] args) throws IOException, ScriptException, InterruptedException {
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
 
         final WorkerPropertiesHandlerImpl propsHndl = new WorkerPropertiesHandlerImpl(fileLoader);
@@ -34,7 +34,9 @@ public final class WorkerMain {
         String pgPassword = propsHndl.getPgPassword();
         String pgUrl = propsHndl.getPgUrl();
 
-        ScriptEngine engine;
+        var engineFactory = SimpleScriptEngineFactory.wrap(
+                new NashornScriptEngineFactory(),
+                f -> f.getScriptEngine("--language=es6", "-doe"));
         var ioThreadPool = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
                 .name("worker-io-", 0)
                 .factory());
@@ -44,10 +46,10 @@ public final class WorkerMain {
         try (Worker worker = Worker.connect(
                 uuid,
                 dfsNodeName,
-                engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
+                engineFactory,
                 ioThreadPool,
                 cpuThreadPool,
-                new PostgresWorkerDfs(engine, dfsCoordinatorName, uuid, config -> {
+                new PostgresWorkerDfs(engineFactory.create(), dfsCoordinatorName, uuid, config -> {
                     PGSimpleDataSource ds = new PGSimpleDataSource();
                     ds.setUrl(pgUrl);
                     ds.setUser(pgUser);
