@@ -4,40 +4,32 @@ import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.coordinator.dfs.PostgresCoordinatorDfs;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.Closeables;
+import it.polimi.ds.dataflow.utils.SimpleScriptEngineFactory;
+import it.polimi.ds.dataflow.worker.SimulateCrashException;
 import it.polimi.ds.dataflow.worker.Worker;
 import it.polimi.ds.dataflow.worker.dfs.PostgresWorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManagerImpl;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.*;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.Parser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import javax.script.ScriptEngine;
-import javax.script.ScriptException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InterruptedIOException;
-import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.dfs.TestcontainerUtil.createDataSourceFor;
@@ -45,6 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers(disabledWithoutDocker = true)
 class CoordinatorTest {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CoordinatorTest.class);
 
     static final WorkDirFileLoader FILE_LOADER = new WorkDirFileLoader(Paths.get("./"));
 
@@ -128,7 +122,12 @@ class CoordinatorTest {
                             engineFactory.create(),
                             "coordinator",
                             UUID.randomUUID(),
-                            config -> config.setDataSource(ds))));
+                            config -> config.setDataSource(ds)) {
+                        @Override
+                        public void close() {
+                            // Avoid closing the datasource
+                        }
+                    }));
         }
         POSTGRES_WORKERS = List.copyOf(POSTGRES_WORKERS);
 
@@ -169,6 +168,16 @@ class CoordinatorTest {
 
         WORKERS = new ArrayList<>();
         for(PostgresWorker pgWorker : POSTGRES_WORKERS) {
+            var workerFactory = getWorkerFactory(pgWorker, engineFactory, port);
+            WORKERS.add(workerFactory.call());
+        }
+    }
+
+    private static Callable<Worker> getWorkerFactory(PostgresWorker pgWorker,
+                                                     SimpleScriptEngineFactory engineFactory,
+                                                     int port) {
+        var workerFactoryRef = new AtomicReference<Callable<Worker>>();
+        var workerFactory = (Callable<Worker>) () -> {
             final var loopTaskRef = new AtomicReference<Future<?>>();
             var worker = Worker.connect(
                     UUID.randomUUID(),
@@ -186,18 +195,31 @@ class CoordinatorTest {
                             super.doClose();
                         }
                     });
-            WORKERS.add(worker);
             loopTaskRef.set(IO_THREAD_POOL.submit(() -> {
                 try {
-                    worker.loop();
-                } catch (InterruptedIOException e) {
-                    Thread.currentThread().interrupt();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                    try {
+                        worker.loop();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } catch (SimulateCrashException e) {
+                        worker.close();
+                        // The close call also interrupts this task, so schedule on a different thread
+                        IO_THREAD_POOL.execute(() -> {
+                            try {
+                                WORKERS.add(workerFactoryRef.get().call());
+                            } catch (Exception ex) {
+                                throw new RuntimeException("Failed to restart worker", ex);
+                            }
+                        });
+                    }
+                } catch (Throwable e) {
+                    LOGGER.error("Uncaught exception in worker test loop", e);
                 }
             }));
-        }
-        WORKERS = List.copyOf(WORKERS);
+            return worker;
+        };
+        workerFactoryRef.set(workerFactory);
+        return workerFactory;
     }
 
     @AfterAll
@@ -220,8 +242,19 @@ class CoordinatorTest {
     @Test
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
     void wordCount() throws Exception {
+        doTestWordCount("word-count.js");
+    }
+
+    @Test
+    @Disabled // TODO:
+//    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    void wordCountCrash() throws Exception {
+        doTestWordCount("word-count-simulated-crash.js");
+    }
+
+    private void doTestWordCount(String scriptName) throws Exception {
         String src;
-        try (InputStream is = FILE_LOADER.loadResourceAsStream("word-count.js")) {
+        try (InputStream is = FILE_LOADER.loadResourceAsStream(scriptName)) {
             src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
 
