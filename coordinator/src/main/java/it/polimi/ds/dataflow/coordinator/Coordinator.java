@@ -230,8 +230,9 @@ public class Coordinator implements Closeable {
             }
 
             return Objects.requireNonNull(
-                    scope.result(IllegalStateException::new),
-                    "Scope result for partition " + srcPartition + " is null");
+                    scope.result(e -> new IllegalStateException(
+                            STR."Failed to execute job \{jobId} for partition \{srcPartition.partition()}", e)),
+                    STR."Scope result of job \{jobId} for partition \{srcPartition} is null");
         } finally {
             workerManager.unregisterConsumersForJob(jobId, srcPartition.partition());
         }
@@ -267,7 +268,7 @@ public class Coordinator implements Closeable {
             } catch (InterruptedIOException ex) {
                 throw ex; // Interrupted, we are done here
             } catch (IOException ex) {
-                LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt, ex);
+                LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt);
 
                 if (reschedule) {
                     // Find someone else to do its job instead

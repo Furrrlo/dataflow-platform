@@ -11,4 +11,16 @@ public record ScheduleJobPacket(
         int partition,
         String dfsDstFileName
 ) implements CoordinatorRequestPacket {
+
+    @Override
+    public String toString() {
+        return "ScheduleJobPacket{" +
+                "jobId=" + jobId +
+                ", dfsSrcFileName='" + dfsSrcFileName + '\'' +
+                ", partitions=" + partitions +
+                ", dfsSrcPartitionNames=" + dfsSrcPartitionNames +
+                ", partition=" + partition +
+                ", dfsDstFileName='" + dfsDstFileName + '\'' +
+                '}';
+    }
 }
