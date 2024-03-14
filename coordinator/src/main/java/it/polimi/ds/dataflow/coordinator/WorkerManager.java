@@ -135,7 +135,8 @@ public final class WorkerManager implements Closeable {
             helloPkt.previousJobs().forEach(job -> {
                 var reconnectListeners = this.reconnectListeners.remove(new ReconnectListenerKey(
                         helloPkt.uuid(), job.jobId(), job.partition()));
-                reconnectListeners.forEach(Runnable::run);
+                if(reconnectListeners != null)
+                    reconnectListeners.forEach(Runnable::run);
             });
 
             // Updating the foreign servers connect to the coordinator's DFS instance
