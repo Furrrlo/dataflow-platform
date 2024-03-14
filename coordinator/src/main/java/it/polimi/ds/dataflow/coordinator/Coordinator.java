@@ -213,7 +213,8 @@ public class Coordinator implements Closeable {
                 dstDfsFileName);
 
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>>()) {
-            scheduleJobPartitionInScope(scope, pktFactory, initialWorker, true);
+            var numOfRunningTasks = new AtomicInteger();
+            scheduleJobPartitionInScope(scope, pktFactory, initialWorker, numOfRunningTasks);
 
             while (true) {
                 try {
@@ -226,7 +227,7 @@ public class Coordinator implements Closeable {
                 // If there's anybody not doing any work, make him work and get the result of whoever finishes first
                 findBestWorkerFor(srcPartition.dfsNodeName(), IDLE_WORKER_THRESHOLD)
                         .ifPresent(freeWorker ->
-                                scheduleJobPartitionInScope(scope, pktFactory, freeWorker, false));
+                                scheduleJobPartitionInScope(scope, pktFactory, freeWorker, numOfRunningTasks));
             }
 
             return Objects.requireNonNull(
@@ -243,16 +244,17 @@ public class Coordinator implements Closeable {
             StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
             Function<WorkerClient, ScheduleJobPacket> pktFactory,
             WorkerClient worker,
-            boolean reschedule
+            AtomicInteger numOfRunningTasks
     ) {
         var pkt = pktFactory.apply(worker);
 
         var unschedule = worker.scheduleJob(pkt.jobId(), pkt.partition());
+        numOfRunningTasks.getAndIncrement();
         scope.fork(() -> {
             // If it disconnects and reconnects, we want to make it pick it up from where it left off
             workerManager.registerReconnectConsumerFor(
                     worker.getUuid(), pkt.jobId(), pkt.partition(),
-                    () -> scheduleJobPartitionInScope(scope, pktFactory, worker, false));
+                    () -> scheduleJobPartitionInScope(scope, pktFactory, worker, numOfRunningTasks));
 
             try (var _ = unschedule;
                  var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
@@ -270,7 +272,7 @@ public class Coordinator implements Closeable {
             } catch (IOException ex) {
                 LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt);
 
-                if (reschedule) {
+                if (numOfRunningTasks.decrementAndGet() == 0) {
                     // Find someone else to do its job instead
                     var maybeNewWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE);
                     WorkerClient newWorker;
@@ -296,7 +298,7 @@ public class Coordinator implements Closeable {
                         }
                     }
 
-                    scheduleJobPartitionInScope(scope, pktFactory, newWorker, true);
+                    scheduleJobPartitionInScope(scope, pktFactory, newWorker, numOfRunningTasks);
                 }
 
                 throw ex;
