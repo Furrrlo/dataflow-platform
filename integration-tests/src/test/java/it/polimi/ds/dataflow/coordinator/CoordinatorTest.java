@@ -242,23 +242,22 @@ class CoordinatorTest {
     @Test
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
     void wordCount() throws Exception {
-        doTestWordCount("word-count.js");
+        doTestWordCount("wordCountTest", "word-count.js");
     }
 
     @Test
     @Disabled // TODO:
 //    @Timeout(value = 5, unit = TimeUnit.MINUTES)
     void wordCountCrash() throws Exception {
-        doTestWordCount("word-count-simulated-crash.js");
+        doTestWordCount("wordCountCrashTest", "word-count-simulated-crash.js");
     }
 
-    private void doTestWordCount(String scriptName) throws Exception {
+    private void doTestWordCount(String name, String scriptName) throws Exception {
         String src;
         try (InputStream is = FILE_LOADER.loadResourceAsStream(scriptName)) {
             src = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
 
-        final String name = "wordCountTest";
         var resDfsFile = COORDINATOR.compileAndExecuteProgram(name, src);
 
         List<Tuple2> res;
