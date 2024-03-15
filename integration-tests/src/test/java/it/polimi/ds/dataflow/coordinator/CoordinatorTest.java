@@ -246,8 +246,7 @@ class CoordinatorTest {
     }
 
     @Test
-    @Disabled // TODO:
-//    @Timeout(value = 5, unit = TimeUnit.MINUTES)
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
     void wordCountCrash() throws Exception {
         doTestWordCount("wordCountCrashTest", "word-count-simulated-crash.js");
     }

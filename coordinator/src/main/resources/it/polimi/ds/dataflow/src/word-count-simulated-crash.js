@@ -1,6 +1,9 @@
 engine
     .lines("kinglear.txt", 8)
     .flatMap(function(line, _) {
+        if(Math.random() < 0.0005)
+            throw simulateCrash();
+
         let words = /** @type {Map<string, number>} */ new Map();
         line.split(/(\s+)/).forEach(function(word) {
             word = word.trim();
@@ -9,11 +12,7 @@ engine
         });
         return words
     })
-    .changeKey((word, _) => {
-        if(Math.random() < 0.5)
-            throw simulateCrash();
-        return word.toLowerCase()
-    })
+    .changeKey((word, _) => word.toLowerCase())
     .reduce(function(word, counts) {
         return counts.reduce((a, b) => a + b, 0);
     })
