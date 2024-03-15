@@ -1,8 +1,6 @@
 package it.polimi.ds.dataflow.utils;
 
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.function.Function;
 
 /**
@@ -90,6 +88,17 @@ public final class ThreadPools {
         } finally {
             if (wasInterrupted)
                 Thread.currentThread().interrupt();
+        }
+    }
+
+    public static <T> T executeSync(ExecutorService cpuThreadPool, Callable<T> callable)
+            throws ExecutionException, InterruptedException {
+        var task = cpuThreadPool.submit(callable);
+        try {
+            return task.get();
+        } catch (InterruptedException ex) {
+            task.cancel(true);
+            throw ex;
         }
     }
 }

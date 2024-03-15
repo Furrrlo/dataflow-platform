@@ -24,6 +24,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class Worker implements Closeable {
 
@@ -35,6 +37,7 @@ public final class Worker implements Closeable {
     private final WorkerDfs dfs;
     private final WorkerSocketManager socket;
 
+    private final Set<Future<?>> tasks = ConcurrentHashMap.newKeySet();
     private final Set<ScheduledJob> currentScheduledJobs = ConcurrentHashMap.newKeySet();
     private volatile @Nullable SimulateCrashException simulatedCrash;
 
@@ -90,6 +93,10 @@ public final class Worker implements Closeable {
     @Override
     @SuppressWarnings("EmptyTryBlock")
     public void close() throws IOException {
+        for (Future<?> t : tasks) {
+            t.cancel(true);
+        }
+
         try (var _ = dfs;
              var _ = socket) {
             // I just want to close everything
@@ -103,7 +110,8 @@ public final class Worker implements Closeable {
             while (!Thread.interrupted()) {
                 var ctx0 = socket.receive(CoordinatorRequestPacket.class);
 
-                ioThreadPool.execute(ThreadPools.giveNameToTask("[job-execution]", () -> {
+                var taskRef = new AtomicReference<Future<?>>();
+                taskRef.set(ioThreadPool.submit(ThreadPools.giveNameToTask("[job-execution]", () -> {
                     try (var ctx = ctx0) {
                         ctx.reply(switch (ctx.getPacket()) {
                             case ScheduleJobPacket pkt -> onScheduleJob(pkt);
@@ -120,8 +128,13 @@ public final class Worker implements Closeable {
                         Thread.currentThread().interrupt();
                         this.simulatedCrash = e;
                         loopThread.interrupt();
+                    } finally {
+                        var currTask = taskRef.get();
+                        if(currTask != null)
+                            tasks.remove(currTask);
                     }
-                }));
+                })));
+                tasks.add(taskRef.get());
             }
 
             simulatedCrash = this.simulatedCrash;
@@ -173,20 +186,22 @@ public final class Worker implements Closeable {
             if(restoredBackup == null)
                 dfs.writeBackupInfo(pkt.jobId(), pkt.partition(), dfsDstFilePartition, null);
 
-            var compiledOps = cpuThreadPool.submit(() -> Program.compile(engine, pkt.ops())).get();
+            var compiledOps = ThreadPools.executeSync(cpuThreadPool, () -> Program.compile(engine, pkt.ops()));
 
             Integer nextBatchPtr = restoredBackup != null ? restoredBackup.nextBatchPtr() : null;
             while (true) {
-                var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
+                if(Thread.interrupted())
+                    throw new InterruptedException();
 
+                var currentBatch = dfs.readNextBatch(dfsSrcFile, pkt.partition(), 1000, nextBatchPtr);
                 if (currentBatch.data().isEmpty()) {
                     break;
                 }
 
                 var currentBatchData = currentBatch.data();
-                var currentBatchRes = cpuThreadPool
-                        .submit(() -> CompiledProgram.execute(compiledOps, currentBatchData.stream()).toList())
-                        .get();
+                var currentBatchRes = ThreadPools.executeSync(
+                        cpuThreadPool,
+                        () -> CompiledProgram.execute(compiledOps, currentBatchData.stream()).toList());
 
                 dfs.writeBatchInPartitionAndBackup(
                         pkt.jobId(), pkt.partition(),
