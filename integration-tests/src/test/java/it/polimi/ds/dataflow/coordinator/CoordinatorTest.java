@@ -122,12 +122,7 @@ class CoordinatorTest {
                             engineFactory.create(),
                             "coordinator",
                             UUID.randomUUID(),
-                            config -> config.setDataSource(ds)) {
-                        @Override
-                        public void close() {
-                            // Avoid closing the datasource
-                        }
-                    }));
+                            config -> config.setDataSource(ds))));
         }
         POSTGRES_WORKERS = List.copyOf(POSTGRES_WORKERS);
 
@@ -177,14 +172,19 @@ class CoordinatorTest {
                                                      SimpleScriptEngineFactory engineFactory,
                                                      int port) {
         var workerFactoryRef = new AtomicReference<Callable<Worker>>();
+        var uuid = UUID.randomUUID();
         var workerFactory = (Callable<Worker>) () -> {
             final var loopTaskRef = new AtomicReference<Future<?>>();
             var worker = Worker.connect(
-                    UUID.randomUUID(),
+                    uuid,
                     pgWorker.postgresNodeName(),
                     engineFactory,
                     IO_THREAD_POOL, CPU_THREAD_POOL,
-                    pgWorker.dfs(),
+                    new PostgresWorkerDfs(
+                            engineFactory.create(),
+                            "coordinator",
+                            uuid,
+                            config -> config.setDataSource(createDataSourceFor(pgWorker.container()))),
                     new InetSocketAddress("localhost", port),
                     s -> new WorkerSocketManagerImpl(s) {
                         @Override
