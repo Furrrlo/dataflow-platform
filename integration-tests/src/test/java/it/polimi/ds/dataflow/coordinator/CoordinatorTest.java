@@ -202,10 +202,10 @@ class CoordinatorTest {
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     } catch (SimulateCrashException e) {
-                        worker.close();
                         // The close call also interrupts this task, so schedule on a different thread
                         IO_THREAD_POOL.execute(() -> {
                             try {
+                                worker.close();
                                 WORKERS.add(workerFactoryRef.get().call());
                             } catch (Exception ex) {
                                 throw new RuntimeException("Failed to restart worker", ex);
