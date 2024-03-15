@@ -253,9 +253,10 @@ public class Coordinator implements Closeable {
         numOfRunningTasks.getAndIncrement();
         scope.fork(() -> {
             // If it disconnects and reconnects, we want to make it pick it up from where it left off
-            workerManager.registerReconnectConsumerFor(
-                    worker.getUuid(), pkt.jobId(), pkt.partition(),
-                    () -> scheduleJobPartitionInScope(scope, pktFactory, worker, numOfRunningTasks));
+//            workerManager.registerReconnectConsumerFor(
+//                    worker.getUuid(), pkt.jobId(), pkt.partition(),
+//                    // TODO: this fails cause it schedules a new job from a thread which is not already part of the scope
+//                    () -> scheduleJobPartitionInScope(scope, pktFactory, worker, numOfRunningTasks));
 
             Exception t0;
             try (var _ = unschedule;
@@ -270,6 +271,7 @@ public class Coordinator implements Closeable {
                     }
                 };
             } catch (InterruptedIOException | JobFailureException ex) {
+                // TODO: should send a cancellation packet
                 throw ex; // Either interrupted or the job failed, we are done
             } catch (IOException | UncheckedIOException ex) {
                 if(LOGGER.isTraceEnabled())
