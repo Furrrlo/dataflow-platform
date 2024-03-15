@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -256,6 +257,7 @@ public class Coordinator implements Closeable {
                     worker.getUuid(), pkt.jobId(), pkt.partition(),
                     () -> scheduleJobPartitionInScope(scope, pktFactory, worker, numOfRunningTasks));
 
+            Exception t0;
             try (var _ = unschedule;
                  var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
 
@@ -263,46 +265,55 @@ public class Coordinator implements Closeable {
                     case JobSuccessPacket resPkt ->
                             new PartitionResult<>(pkt.partition(), new JobResult(worker, resPkt));
                     case JobFailurePacket(Exception ex) -> {
-                        LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new Exception(ex));
-                        throw new Exception(ex);
+                        LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new JobFailureException(ex));
+                        throw new JobFailureException(ex);
                     }
                 };
-            } catch (InterruptedIOException ex) {
-                throw ex; // Interrupted, we are done here
-            } catch (IOException ex) {
-                LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt);
-
-                if (numOfRunningTasks.decrementAndGet() == 0) {
-                    // Find someone else to do its job instead
-                    var maybeNewWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE);
-                    WorkerClient newWorker;
-                    if (maybeNewWorker.isPresent()) {
-                        newWorker = maybeNewWorker.get();
-                    } else {
-                        try {
-                            newWorker = workerManager.waitForAnyReconnections()
-                                    .get(NO_NODES_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-                        } catch (InterruptedException | ExecutionException innerEx) {
-                            innerEx.addSuppressed(ex);
-                            throw innerEx;
-                        } catch (TimeoutException innerEx) {
-                            // Try one last time, in case we missed a new connection between the previous
-                            // findBestWorkerFor call and the waitForAnyReconnections call
-                            newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE).orElseThrow(() -> {
-                                var newEx = new IOException("No nodes connected for more than "
-                                        + TimeUnit.MILLISECONDS.toSeconds(NO_NODES_TIMEOUT_MILLIS) + "s",
-                                        innerEx);
-                                newEx.addSuppressed(ex);
-                                return ex;
-                            });
-                        }
-                    }
-
-                    scheduleJobPartitionInScope(scope, pktFactory, newWorker, numOfRunningTasks);
-                }
-
-                throw ex;
+            } catch (InterruptedIOException | JobFailureException ex) {
+                throw ex; // Either interrupted or the job failed, we are done
+            } catch (IOException | UncheckedIOException ex) {
+                if(LOGGER.isTraceEnabled())
+                    LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt, ex);
+                else
+                    LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt);
+                t0 = ex;
+            } catch (Throwable t) {
+                LOGGER.error("Unexpected error on Worker {} while executing job {}", worker.getUuid(), pkt, t);
+                t0 = t instanceof Exception ex ? ex : new Exception(t);
             }
+
+            final var t = t0;
+            boolean reschedule = numOfRunningTasks.decrementAndGet() == 0;
+            if (!reschedule)
+                throw t;
+
+            // Find someone else to do its job instead
+            var maybeNewWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE);
+            WorkerClient newWorker;
+            if (maybeNewWorker.isPresent()) {
+                newWorker = maybeNewWorker.get();
+            } else {
+                try {
+                    newWorker = workerManager.waitForAnyReconnections()
+                            .get(NO_NODES_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException | ExecutionException innerEx) {
+                    innerEx.addSuppressed(t);
+                    throw innerEx;
+                } catch (TimeoutException innerEx) {
+                    // Try one last time, in case we missed a new connection between the previous
+                    // findBestWorkerFor call and the waitForAnyReconnections call
+                    newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE).orElseThrow(() -> {
+                        var newEx = new IOException("No nodes connected for more than "
+                                + TimeUnit.MILLISECONDS.toSeconds(NO_NODES_TIMEOUT_MILLIS) + "s",
+                                innerEx);
+                        newEx.addSuppressed(t);
+                        return newEx;
+                    });
+                }
+            }
+
+            scheduleJobPartitionInScope(scope, pktFactory, newWorker, numOfRunningTasks);
+            throw new IllegalStateException("Rescheduled", t);
         });
     }
 
