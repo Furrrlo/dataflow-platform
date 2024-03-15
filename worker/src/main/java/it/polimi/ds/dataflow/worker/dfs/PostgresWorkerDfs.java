@@ -19,6 +19,8 @@ import javax.script.ScriptException;
 import java.util.Collection;
 import java.util.SequencedCollection;
 import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.FOREIGN;
@@ -28,6 +30,8 @@ import static it.polimi.ds.dataflow.worker.dfs.Tables.DATAFLOW_JOBS;
 import static org.jooq.impl.DSL.field;
 
 public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
+
+    private static final Lock LIQUIBASE_GLOBAL_LOCK = new ReentrantLock();
 
     private final UUID uuid;
     private final String coordinatorName;
@@ -55,6 +59,8 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     @SuppressWarnings("deprecation")
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS") // Shouldn't happen anyway
     private void performLiquibaseMigration() {
+        LIQUIBASE_GLOBAL_LOCK.lock();
+
         try (Liquibase liquibase = createLiquibase()) {
             var lockService = LockServiceFactory.getInstance().getLockService(liquibase.getDatabase());
             lockService.waitForLock();
@@ -66,6 +72,8 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
             }
         } catch (LiquibaseException ex) {
             throw new IllegalStateException("Failed to perform Liquibase migration", ex);
+        } finally {
+            LIQUIBASE_GLOBAL_LOCK.unlock();
         }
     }
 
