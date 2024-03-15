@@ -19,7 +19,9 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
@@ -33,6 +35,7 @@ public final class Worker implements Closeable {
     private final WorkerDfs dfs;
     private final WorkerSocketManager socket;
 
+    private final Set<ScheduledJob> currentScheduledJobs = ConcurrentHashMap.newKeySet();
     private volatile @Nullable SimulateCrashException simulatedCrash;
 
     public static Worker connect(UUID uuid,
@@ -146,6 +149,13 @@ public final class Worker implements Closeable {
      * @throws InterruptedException if the current thread was interrupted while waiting
      */
     private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
+        var scheduledJob = new ScheduledJob(pkt.jobId(), pkt.partition());
+        boolean alreadyScheduled = !currentScheduledJobs.add(scheduledJob);
+        if (alreadyScheduled)
+            return new JobFailurePacket(new IllegalStateException(
+                    "Job " + pkt.jobId() + " for partition " + pkt.partition() +
+                            " was already scheduled on this node"));
+
         try {
             var engine = engineFactory.create();
             var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions(), pkt.dfsSrcPartitionNames());
@@ -197,6 +207,8 @@ public final class Worker implements Closeable {
             return new JobFailurePacket(ex);
         } catch (Exception ex) {
             return new JobFailurePacket(ex);
+        } finally {
+            currentScheduledJobs.remove(scheduledJob);
         }
     }
 
@@ -211,5 +223,8 @@ public final class Worker implements Closeable {
         } catch (Exception ex) {
             return new CreateFilePartitionFailurePacket(ex);
         }
+    }
+
+    private record ScheduledJob(int jobId, int partition) {
     }
 }
