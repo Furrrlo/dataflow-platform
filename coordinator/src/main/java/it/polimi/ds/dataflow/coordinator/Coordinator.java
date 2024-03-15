@@ -279,7 +279,9 @@ public class Coordinator implements Closeable {
                 t0 = ex;
             } catch (Throwable t) {
                 LOGGER.error("Unexpected error on Worker {} while executing job {}", worker.getUuid(), pkt, t);
-                t0 = t instanceof Exception ex ? ex : new Exception(t);
+                @SuppressWarnings("PMD.AvoidInstanceofChecksInCatchClause")
+                boolean isException = t instanceof Exception;
+                t0 = isException ? (Exception) t : new Exception(t);
             }
 
             final var t = t0;

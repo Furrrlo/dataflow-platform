@@ -146,7 +146,8 @@ public final class Worker implements Closeable {
 
         this.simulatedCrash = null;
         if(simulatedCrash != null) {
-            @SuppressWarnings("unused") var unused = Thread.interrupted(); // Clear interrupt flag
+            //noinspection ResultOfMethodCallIgnored
+            Thread.interrupted(); // Clear interrupt flag
             throw new SimulateCrashException(simulatedCrash);
         }
     }
@@ -215,16 +216,20 @@ public final class Worker implements Closeable {
         } catch (InterruptedException | SimulateCrashException ex) {
             throw ex;
         } catch (ExecutionException ex) {
-            if(ex.getCause() instanceof NashornException jsException &&
-                    jsException.getCause() instanceof SimulateCrashException simulateEx)
-                throw simulateEx;
-
-            return new JobFailurePacket(ex);
+            return new JobFailurePacket(unwrapSimulateCrashException(ex));
         } catch (Exception ex) {
             return new JobFailurePacket(ex);
         } finally {
             currentScheduledJobs.remove(scheduledJob);
         }
+    }
+
+    // As a separate method so that PMD is happy
+    private ExecutionException unwrapSimulateCrashException(ExecutionException ex) {
+        if(ex.getCause() instanceof NashornException jsException &&
+                jsException.getCause() instanceof SimulateCrashException simulateEx)
+            throw simulateEx;
+        return ex;
     }
 
     /**
