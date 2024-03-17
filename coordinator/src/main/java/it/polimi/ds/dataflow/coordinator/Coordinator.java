@@ -12,6 +12,8 @@ import it.polimi.ds.dataflow.js.Program;
 import it.polimi.ds.dataflow.socket.packets.*;
 import it.polimi.ds.dataflow.src.Src;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.ExceptionlessAutoCloseable;
+import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
 import org.slf4j.Logger;
@@ -24,7 +26,6 @@ import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -215,7 +216,7 @@ public class Coordinator implements Closeable {
 
         try (var scope = new StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>>()) {
             var numOfRunningTasks = new AtomicInteger();
-            scheduleJobPartitionInScope(scope, pktFactory, initialWorker, numOfRunningTasks);
+            scheduleJobPartitionInScopeFork(scope, pktFactory, initialWorker, numOfRunningTasks);
 
             while (true) {
                 try {
@@ -228,7 +229,7 @@ public class Coordinator implements Closeable {
                 // If there's anybody not doing any work, make him work and get the result of whoever finishes first
                 findBestWorkerFor(srcPartition.dfsNodeName(), IDLE_WORKER_THRESHOLD)
                         .ifPresent(freeWorker ->
-                                scheduleJobPartitionInScope(scope, pktFactory, freeWorker, numOfRunningTasks));
+                                scheduleJobPartitionInScopeFork(scope, pktFactory, freeWorker, numOfRunningTasks));
             }
 
             return Objects.requireNonNull(
@@ -241,58 +242,86 @@ public class Coordinator implements Closeable {
     }
 
     @SuppressWarnings("resource")
-    private void scheduleJobPartitionInScope(
+    private void scheduleJobPartitionInScopeFork(
             StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
             Function<WorkerClient, ScheduleJobPacket> pktFactory,
             WorkerClient worker,
             AtomicInteger numOfRunningTasks
     ) {
         var pkt = pktFactory.apply(worker);
-
         var unschedule = worker.scheduleJob(pkt.jobId(), pkt.partition());
         numOfRunningTasks.getAndIncrement();
+        scope.fork(() -> scheduleJobPartitionInScopeBody(
+                scope, pktFactory, worker, pkt, unschedule, numOfRunningTasks));
+    }
+
+    @SuppressWarnings("PMD.SignatureDeclareThrowsException") // Executed in scope fork, which can throw any exception
+    private PartitionResult<JobResult> scheduleJobPartitionInScope(
+            StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
+            Function<WorkerClient, ScheduleJobPacket> pktFactory,
+            WorkerClient worker,
+            AtomicInteger numOfRunningTasks
+    ) throws Exception {
+        var pkt = pktFactory.apply(worker);
+        var unschedule = worker.scheduleJob(pkt.jobId(), pkt.partition());
+        numOfRunningTasks.getAndIncrement();
+        return scheduleJobPartitionInScopeBody(scope, pktFactory, worker, pkt, unschedule, numOfRunningTasks);
+    }
+
+    @SuppressWarnings("PMD.SignatureDeclareThrowsException") // Executed in scope fork, which can throw any exception
+    @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS") // Done on purpose, it's the job result
+    private PartitionResult<JobResult> scheduleJobPartitionInScopeBody(
+            StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
+            Function<WorkerClient, ScheduleJobPacket> pktFactory,
+            WorkerClient worker,
+            ScheduleJobPacket pkt,
+            ExceptionlessAutoCloseable unschedule,
+            AtomicInteger numOfRunningTasks
+    ) throws Exception {
+        try (var _ = unschedule;
+             var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
+
+            return switch (ctx.getPacket()) {
+                case JobSuccessPacket resPkt ->
+                        new PartitionResult<>(pkt.partition(), new JobResult(worker, resPkt));
+                case JobFailurePacket(Exception ex) -> {
+                    LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new JobFailureException(ex));
+                    throw new JobFailureException(ex);
+                }
+            };
+        } catch (JobFailureException ex) {
+            throw ex; // The job failed, we are done
+        } catch (InterruptedIOException ex) {
+            // TODO: should send a cancellation packet
+            throw (InterruptedException) new InterruptedException().initCause(ex); // Interrupted we are done
+        } catch (IOException | UncheckedIOException ex) {
+            if(LOGGER.isTraceEnabled())
+                LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt, ex);
+            else
+                LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt);
+        } catch (Throwable t) {
+            LOGGER.error("Unexpected error on Worker {} while executing job {}", worker.getUuid(), pkt, t);
+        }
+
+        boolean reschedule = numOfRunningTasks.decrementAndGet() == 0;
+        if (reschedule)
+            rescheduleJobPartitionInScopeFork(scope, pkt.dfsSrcFileName(), pktFactory, numOfRunningTasks);
+
+        // If it disconnects and reconnects, we want to make it pick it up from where it left off
+        WorkerClient reconnected = workerManager
+                .waitForReconnectionOf(worker.getUuid(), pkt.jobId(), pkt.partition())
+                .get();
+        return scheduleJobPartitionInScope(scope, pktFactory, reconnected, numOfRunningTasks);
+    }
+
+    private void rescheduleJobPartitionInScopeFork(
+            StructuredTaskScope.ShutdownOnSuccess<PartitionResult<JobResult>> scope,
+            String dfsSrcFileName,
+            Function<WorkerClient, ScheduleJobPacket> pktFactory,
+            AtomicInteger numOfRunningTasks
+    ) {
         scope.fork(() -> {
-            // If it disconnects and reconnects, we want to make it pick it up from where it left off
-//            workerManager.registerReconnectConsumerFor(
-//                    worker.getUuid(), pkt.jobId(), pkt.partition(),
-//                    // TODO: this fails cause it schedules a new job from a thread which is not already part of the scope
-//                    () -> scheduleJobPartitionInScope(scope, pktFactory, worker, numOfRunningTasks));
-
-            Exception t0;
-            try (var _ = unschedule;
-                 var ctx = worker.getSocket().send(pkt, JobResultPacket.class)) {
-
-                return switch (ctx.getPacket()) {
-                    case JobSuccessPacket resPkt ->
-                            new PartitionResult<>(pkt.partition(), new JobResult(worker, resPkt));
-                    case JobFailurePacket(Exception ex) -> {
-                        LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new JobFailureException(ex));
-                        throw new JobFailureException(ex);
-                    }
-                };
-            } catch (InterruptedIOException | JobFailureException ex) {
-                // TODO: should send a cancellation packet
-                throw ex; // Either interrupted or the job failed, we are done
-            } catch (IOException | UncheckedIOException ex) {
-                if(LOGGER.isTraceEnabled())
-                    LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt, ex);
-                else
-                    LOGGER.error("Network error on Worker {} while executing job {}", worker.getUuid(), pkt);
-                t0 = ex;
-            } catch (Throwable t) {
-                LOGGER.error("Unexpected error on Worker {} while executing job {}", worker.getUuid(), pkt, t);
-                @SuppressWarnings("PMD.AvoidInstanceofChecksInCatchClause")
-                boolean isException = t instanceof Exception;
-                t0 = isException ? (Exception) t : new Exception(t);
-            }
-
-            final var t = t0;
-            boolean reschedule = numOfRunningTasks.decrementAndGet() == 0;
-            if (!reschedule)
-                throw t;
-
-            // Find someone else to do its job instead
-            var maybeNewWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE);
+            var maybeNewWorker = findBestWorkerFor(dfsSrcFileName, Integer.MAX_VALUE);
             WorkerClient newWorker;
             if (maybeNewWorker.isPresent()) {
                 newWorker = maybeNewWorker.get();
@@ -300,24 +329,22 @@ public class Coordinator implements Closeable {
                 try {
                     newWorker = workerManager.waitForAnyReconnections()
                             .get(NO_NODES_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException | ExecutionException innerEx) {
-                    innerEx.addSuppressed(t);
-                    throw innerEx;
-                } catch (TimeoutException innerEx) {
+                } catch (TimeoutException ex) {
                     // Try one last time, in case we missed a new connection between the previous
                     // findBestWorkerFor call and the waitForAnyReconnections call
-                    newWorker = findBestWorkerFor(pkt.dfsSrcFileName(), Integer.MAX_VALUE).orElseThrow(() -> {
-                        var newEx = new IOException("No nodes connected for more than "
+                    maybeNewWorker = findBestWorkerFor(dfsSrcFileName, Integer.MAX_VALUE);
+                    if(maybeNewWorker.isEmpty()) {
+                        scope.shutdown();
+                        throw new IOException("No nodes connected for more than "
                                 + TimeUnit.MILLISECONDS.toSeconds(NO_NODES_TIMEOUT_MILLIS) + "s",
-                                innerEx);
-                        newEx.addSuppressed(t);
-                        return newEx;
-                    });
+                                ex);
+                    }
+
+                    newWorker = maybeNewWorker.get();
                 }
             }
 
-            scheduleJobPartitionInScope(scope, pktFactory, newWorker, numOfRunningTasks);
-            throw new IllegalStateException("Rescheduled", t);
+            return scheduleJobPartitionInScope(scope, pktFactory, newWorker, numOfRunningTasks);
         });
     }
 

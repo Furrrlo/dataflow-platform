@@ -38,7 +38,7 @@ public final class WorkerManager implements Closeable {
     private final Collection<Future<?>> workersTasks = ConcurrentHashMap.newKeySet();
 
     private final Set<WorkerClient> workers = ConcurrentHashMap.newKeySet();
-    private final ConcurrentMap<ReconnectListenerKey, Set<Runnable>> reconnectListeners = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ReconnectListenerKey, Set<CompletableFuture<WorkerClient>>> reconnectListeners = new ConcurrentHashMap<>();
     private final Set<CompletableFuture<WorkerClient>> reconnectionFutures = ConcurrentHashMap.newKeySet();
     private volatile @Nullable Consumer<String> foreignServersUpdater;
 
@@ -136,7 +136,7 @@ public final class WorkerManager implements Closeable {
                 var reconnectListeners = this.reconnectListeners.remove(new ReconnectListenerKey(
                         helloPkt.uuid(), job.jobId(), job.partition()));
                 if(reconnectListeners != null)
-                    reconnectListeners.forEach(Runnable::run);
+                    reconnectListeners.forEach(f -> f.complete(workerClient));
             });
 
             // Updating the foreign servers connect to the coordinator's DFS instance
@@ -153,11 +153,13 @@ public final class WorkerManager implements Closeable {
         }
     }
 
-    public void registerReconnectConsumerFor(UUID worker, int jobId, int partition, Runnable runnable) {
+    public Future<WorkerClient> waitForReconnectionOf(UUID worker, int jobId, int partition) {
+        var future = new CompletableFuture<WorkerClient>();
         reconnectListeners.computeIfAbsent(
                 new ReconnectListenerKey(worker, jobId, partition),
                 _ -> ConcurrentHashMap.newKeySet()
-        ).add(runnable);
+        ).add(future);
+        return future;
     }
 
     public void registerForeignServersUpdater(Consumer<String> consumer) {
