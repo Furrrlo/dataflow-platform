@@ -19,6 +19,7 @@ import javax.script.ScriptException;
 import java.util.Collection;
 import java.util.SequencedCollection;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -59,21 +60,24 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     @SuppressWarnings("deprecation")
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS") // Shouldn't happen anyway
     private void performLiquibaseMigration() {
-        LIQUIBASE_GLOBAL_LOCK.lock();
+        try {
+            if(!LIQUIBASE_GLOBAL_LOCK.tryLock(20, TimeUnit.SECONDS))
+                throw new IllegalStateException("Failed to acquire lock to perform Liquibase migration");
 
-        try (Liquibase liquibase = createLiquibase()) {
-            var lockService = LockServiceFactory.getInstance().getLockService(liquibase.getDatabase());
-            lockService.waitForLock();
-            try {
-                liquibase.validate();
-                liquibase.update();
+            try(Liquibase liquibase = createLiquibase()) {
+                var lockService = LockServiceFactory.getInstance().getLockService(liquibase.getDatabase());
+                lockService.waitForLock();
+                try {
+                    liquibase.validate();
+                    liquibase.update();
+                } finally {
+                    lockService.releaseLock();
+                }
             } finally {
-                lockService.releaseLock();
+                LIQUIBASE_GLOBAL_LOCK.unlock();
             }
-        } catch (LiquibaseException ex) {
+        } catch (LiquibaseException | InterruptedException ex) {
             throw new IllegalStateException("Failed to perform Liquibase migration", ex);
-        } finally {
-            LIQUIBASE_GLOBAL_LOCK.unlock();
         }
     }
 
