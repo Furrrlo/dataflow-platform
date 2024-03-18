@@ -101,6 +101,7 @@ class CoordinatorTest {
         COORDINATOR = new Coordinator(
                 FILE_LOADER,
                 Parser.create("--language=es6"),
+                IO_THREAD_POOL,
                 workerManager = WorkerManager.listen(IO_THREAD_POOL, port, null),
                 COORDINATOR_DFS = new PostgresCoordinatorDfs(
                         engineFactory.create(),

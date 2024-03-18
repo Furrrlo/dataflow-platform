@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 public final class Worker implements Closeable {
 
@@ -39,7 +41,7 @@ public final class Worker implements Closeable {
     private final WorkerSocketManager socket;
 
     private final Set<Future<?>> tasks = ConcurrentHashMap.newKeySet();
-    private final Set<ScheduledJob> currentScheduledJobs = ConcurrentHashMap.newKeySet();
+    private final Map<ScheduledJob, Supplier<@Nullable Future<?>>> currentScheduledJobs = new ConcurrentHashMap<>();
     private volatile @Nullable SimulateCrashException simulatedCrash;
 
     public static Worker connect(UUID uuid,
@@ -114,11 +116,17 @@ public final class Worker implements Closeable {
                 var taskRef = new AtomicReference<Future<?>>();
                 taskRef.set(ioThreadPool.submit(ThreadPools.giveNameToTask("[job-execution]", () -> {
                     try (var ctx = ctx0) {
-                        ctx.reply(switch (ctx.getPacket()) {
-                            case ScheduleJobPacket pkt -> onScheduleJob(pkt);
+                        var replyPkt = switch (ctx.getPacket()) {
+                            case ScheduleJobPacket pkt -> onScheduleJob(pkt, taskRef::get);
+                            case CancelJobPacket pkt -> {
+                                onCancelJob(pkt);
+                                yield null;
+                            }
                             case CreateFilePartitionPacket pkt -> onCreateFilePartition(pkt);
                             case PingPacket _ -> new PongPacket();
-                        });
+                        };
+                        if(replyPkt != null)
+                            ctx.reply(replyPkt);
                     } catch (IOException e) {
                         // If it's an unrecoverable failure, the next socket.receive() call is gonna blow up anyway
                         // No need to make everything die here, we can just log and go on
@@ -163,9 +171,9 @@ public final class Worker implements Closeable {
      * @return a response packet which attests whether the job was executed successfully or not
      * @throws InterruptedException if the current thread was interrupted while waiting
      */
-    private JobResultPacket onScheduleJob(ScheduleJobPacket pkt) throws InterruptedException {
+    private JobResultPacket onScheduleJob(ScheduleJobPacket pkt, Supplier<@Nullable Future<?>> taskRef) throws InterruptedException {
         var scheduledJob = new ScheduledJob(pkt.jobId(), pkt.partition());
-        boolean alreadyScheduled = !currentScheduledJobs.add(scheduledJob);
+        boolean alreadyScheduled = currentScheduledJobs.putIfAbsent(scheduledJob, taskRef) != null;
         if (alreadyScheduled)
             return new JobFailurePacket(new IllegalStateException(
                     "Job " + pkt.jobId() + " for partition " + pkt.partition() +
@@ -231,6 +239,18 @@ public final class Worker implements Closeable {
                 jsException.getCause() instanceof SimulateCrashException simulateEx)
             throw simulateEx;
         return ex;
+    }
+
+    private void onCancelJob(CancelJobPacket pkt) {
+        var taskRef = currentScheduledJobs.get(new ScheduledJob(pkt.jobId(), pkt.partition()));
+        if(taskRef == null)
+            return;
+
+        var task = taskRef.get();
+        if(task == null)
+            return;
+
+        task.cancel(true);
     }
 
     /**

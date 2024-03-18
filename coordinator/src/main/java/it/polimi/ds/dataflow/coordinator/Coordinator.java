@@ -26,6 +26,7 @@ import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -43,16 +44,19 @@ public class Coordinator implements Closeable {
 
     private final WorkDirFileLoader fileLoader;
     private final Parser parser;
+    private final ExecutorService threadPool;
     private final CoordinatorDfs dfs;
     private final WorkerManager workerManager;
     private final AtomicInteger currentJobNumber = new AtomicInteger(RandomGenerator.getDefault().nextInt());
 
     public Coordinator(WorkDirFileLoader fileLoader,
                        Parser parser,
+                       ExecutorService threadPool,
                        WorkerManager workerManager,
                        CoordinatorDfs dfs) {
         this.fileLoader = fileLoader;
         this.parser = parser;
+        this.threadPool = threadPool;
         this.dfs = dfs;
         this.workerManager = workerManager;
     }
@@ -292,7 +296,13 @@ public class Coordinator implements Closeable {
         } catch (JobFailureException ex) {
             throw ex; // The job failed, we are done
         } catch (InterruptedIOException ex) {
-            // TODO: should send a cancellation packet
+            threadPool.execute(() -> {
+                try {
+                    worker.getSocket().send(new CancelJobPacket(pkt.jobId(), pkt.partition()));
+                } catch (IOException _) {
+                    // We do not care that much about this, if the other side receives it great, otherwise dc
+                }
+            });
             throw (InterruptedException) new InterruptedException().initCause(ex); // Interrupted we are done
         } catch (IOException | UncheckedIOException ex) {
             if(LOGGER.isTraceEnabled())

@@ -42,6 +42,7 @@ public final class CoordinatorMain {
         try (var coordinator = new Coordinator(
                 fileLoader,
                 Parser.create("--language=es6"),
+                threadPool,
                 workerManager = WorkerManager.listen(threadPool, propsHndl.getListeningPort(), mainThread::interrupt),
                 new PostgresCoordinatorDfs(
                         new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe"),
