@@ -58,20 +58,26 @@ public class PostgresDfs implements Dfs {
         this.ctx = using(new DefaultConfiguration()
                 .set(SQLDialect.POSTGRES)
                 .set(dataSource)
-                // Translate interruption exception to UncheckedInterruptedException
-                .set(new ExecuteListener() {
-                    @Override
-                    public void exception(ExecuteContext ctx) {
-                        if(Thread.interrupted()) {
-                            var ex = ctx.sqlException() != null
-                                    ? ctx.sqlException()
-                                    : ctx.exception() != null
-                                    ? ctx.exception()
-                                    : null;
-                            ctx.exception(new UncheckedInterruptedException(ex));
-                        }
-                    }
-                }));
+                .set(new TranslateInterruptedExceptionExecuteListener()));
+    }
+
+    @SuppressWarnings({
+            "serial", // Don't care about this being serializable
+            "RedundantSuppression" // Javac complains about serial, IntelliJ about the suppression
+    })
+    private static final class TranslateInterruptedExceptionExecuteListener implements ExecuteListener {
+
+        @Override
+        public void exception(ExecuteContext ctx) {
+            if(Thread.interrupted()) {
+                var ex = ctx.sqlException() != null
+                        ? ctx.sqlException()
+                        : ctx.exception() != null
+                        ? ctx.exception()
+                        : null;
+                ctx.exception(new UncheckedInterruptedException(ex));
+            }
+        }
     }
 
     @Override

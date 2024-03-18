@@ -289,14 +289,15 @@ public class Coordinator implements Closeable {
                 case JobSuccessPacket resPkt ->
                         new PartitionResult<>(pkt.partition(), new JobResult(worker, resPkt));
                 case JobFailurePacket(Exception ex) -> {
-                    LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, new JobFailureException(ex));
-                    throw new JobFailureException(ex);
+                    // The job failed for an exception in the submitted program (most likely), so we are done
+                    var jobFailureEx = new JobFailureException(ex);
+                    LOGGER.error("Worker {} failed to execute job {}", worker.getUuid(), pkt, jobFailureEx);
+                    scope.shutdown();
+                    throw jobFailureEx;
                 }
             };
         } catch (JobFailureException ex) {
-            // The job failed for an exception in the submitted program (most likely), so we are done
-            scope.shutdown();
-            throw ex;
+            throw ex; // Submitted program failed, we are done
         } catch (InterruptedIOException ex) {
             threadPool.execute(() -> {
                 try {
