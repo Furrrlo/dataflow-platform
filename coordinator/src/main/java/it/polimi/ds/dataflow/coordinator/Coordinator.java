@@ -294,7 +294,9 @@ public class Coordinator implements Closeable {
                 }
             };
         } catch (JobFailureException ex) {
-            throw ex; // The job failed, we are done
+            // The job failed for an exception in the submitted program (most likely), so we are done
+            scope.shutdown();
+            throw ex;
         } catch (InterruptedIOException ex) {
             threadPool.execute(() -> {
                 try {
