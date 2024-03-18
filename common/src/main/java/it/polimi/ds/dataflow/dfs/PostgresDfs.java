@@ -4,10 +4,13 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.utils.UncheckedInterruptedException;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.Record;
 import org.jooq.*;
+import org.jooq.exception.DataAccessException;
+import org.jooq.impl.DefaultConfiguration;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
 
@@ -16,7 +19,10 @@ import javax.script.ScriptException;
 import javax.sql.DataSource;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.random.RandomGenerator;
@@ -49,7 +55,23 @@ public class PostgresDfs implements Dfs {
         configurator.accept(config);
         this.dataSource = new HikariDataSource(config);
 
-        this.ctx = using(dataSource, SQLDialect.POSTGRES);
+        this.ctx = using(new DefaultConfiguration()
+                .set(SQLDialect.POSTGRES)
+                .set(dataSource)
+                // Translate interruption exception to UncheckedInterruptedException
+                .set(new ExecuteListener() {
+                    @Override
+                    public void exception(ExecuteContext ctx) {
+                        if(Thread.interrupted()) {
+                            var ex = ctx.sqlException() != null
+                                    ? ctx.sqlException()
+                                    : ctx.exception() != null
+                                    ? ctx.exception()
+                                    : null;
+                            ctx.exception(new UncheckedInterruptedException(ex));
+                        }
+                    }
+                }));
     }
 
     @Override
@@ -59,6 +81,12 @@ public class PostgresDfs implements Dfs {
     public void close() throws IOException {
         if (dataSource instanceof Closeable closeableDs)
             closeableDs.close();
+    }
+
+    protected DataAccessException translateException(DataAccessException ex) {
+        if(Thread.interrupted())
+            throw new UncheckedInterruptedException(ex);
+        throw ex;
     }
 
     @Override

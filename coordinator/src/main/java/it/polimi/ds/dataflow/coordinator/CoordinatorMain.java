@@ -5,6 +5,7 @@ import it.polimi.ds.dataflow.coordinator.properties.CoordinatorPropertiesHandler
 import it.polimi.ds.dataflow.coordinator.properties.CoordinatorPropertiesHandlerImpl;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import it.polimi.ds.dataflow.utils.UncheckedInterruptedException;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.Parser;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -105,7 +106,7 @@ public final class CoordinatorMain {
 
             try {
                 coordinator.compileAndExecuteProgram(programFileName, src);
-            } catch (InterruptedException | InterruptedIOException ex) {
+            } catch (InterruptedException | UncheckedInterruptedException | InterruptedIOException ex) {
                 throw ex;
             } catch (Throwable t) {
                 //Raised if an identical job (with the same name) has been already submitted

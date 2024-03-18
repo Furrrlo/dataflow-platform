@@ -7,6 +7,7 @@ import it.polimi.ds.dataflow.socket.packets.*;
 import it.polimi.ds.dataflow.utils.IoFunction;
 import it.polimi.ds.dataflow.utils.SimpleScriptEngineFactory;
 import it.polimi.ds.dataflow.utils.ThreadPools;
+import it.polimi.ds.dataflow.utils.UncheckedInterruptedException;
 import it.polimi.ds.dataflow.worker.dfs.WorkerDfs;
 import it.polimi.ds.dataflow.worker.socket.WorkerSocketManager;
 import org.jspecify.annotations.Nullable;
@@ -122,7 +123,7 @@ public final class Worker implements Closeable {
                         // If it's an unrecoverable failure, the next socket.receive() call is gonna blow up anyway
                         // No need to make everything die here, we can just log and go on
                         LOGGER.error("Failed to send reply to coordinator", e);
-                    } catch (InterruptedException e) {
+                    } catch (InterruptedException | UncheckedInterruptedException e) {
                         Thread.currentThread().interrupt();
                     } catch (SimulateCrashException e) {
                         Thread.currentThread().interrupt();
@@ -213,7 +214,7 @@ public final class Worker implements Closeable {
 
             return new JobSuccessPacket(dfsDstFilePartition.partitionFileName());
 
-        } catch (InterruptedException | SimulateCrashException ex) {
+        } catch (InterruptedException | UncheckedInterruptedException | SimulateCrashException ex) {
             throw ex;
         } catch (ExecutionException ex) {
             return new JobFailurePacket(unwrapSimulateCrashException(ex));
