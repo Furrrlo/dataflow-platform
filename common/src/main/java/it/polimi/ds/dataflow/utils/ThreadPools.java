@@ -91,6 +91,42 @@ public final class ThreadPools {
         }
     }
 
+    /**
+     * Waits if necessary for the computation to complete, and then
+     * retrieves its result.
+     * <p>
+     * If a thread is interrupted during the call, it continues to block until the result is available,
+     * and then re-interrupts the thread at the end.
+     *
+     * @param timeout the maximum time to wait
+     * @param unit the time unit of the timeout argument
+     * @return the computed result
+     * @param <T> The result type returned by this Future's get method
+     * @throws CancellationException if the computation was cancelled
+     * @throws ExecutionException if the computation threw an exception
+     * @throws TimeoutException if the wait timed out
+     */
+    @SuppressWarnings("UnusedReturnValue")
+    public static <T> T getUninterruptibly(Future<T> future, long timeout, TimeUnit unit)
+            throws ExecutionException, TimeoutException {
+        boolean wasInterrupted = false;
+        try {
+            long remaining = timeout;
+            while (true) {
+                long start = System.nanoTime();
+                try {
+                    return future.get(remaining, unit);
+                } catch (InterruptedException e) {
+                    wasInterrupted = true;
+                    remaining -= unit.convert(System.nanoTime() - start, TimeUnit.NANOSECONDS);
+                }
+            }
+        } finally {
+            if (wasInterrupted)
+                Thread.currentThread().interrupt();
+        }
+    }
+
     public static <T> T executeSync(ExecutorService cpuThreadPool, Callable<T> callable)
             throws ExecutionException, InterruptedException {
         var task = cpuThreadPool.submit(callable);

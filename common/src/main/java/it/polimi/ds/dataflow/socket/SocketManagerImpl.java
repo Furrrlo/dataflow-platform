@@ -2,6 +2,7 @@ package it.polimi.ds.dataflow.socket;
 
 import it.polimi.ds.dataflow.socket.packets.AckPacket;
 import it.polimi.ds.dataflow.socket.packets.Packet;
+import it.polimi.ds.dataflow.socket.packets.PingPacket;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import it.polimi.ds.dataflow.utils.ThreadPools;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
@@ -291,12 +292,20 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         }
     }
 
+    private void doSend(SeqPacket toSend) throws IOException {
+        try {
+            doSend(toSend, -1, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
+            throw new AssertionError("Should never happen, there's no timeout", ex);
+        }
+    }
+
     @SuppressWarnings("PMD.PreserveStackTrace") // The stack trace is discarded intentionally
     @SuppressFBWarnings({
             "EXS_EXCEPTION_SOFTENING_NO_CONSTRAINTS", // Only converted to unchecked if completely unexpected
             "LEST_LOST_EXCEPTION_STACK_TRACE" // The stack trace is discarded intentionally
     })
-    private void doSend(SeqPacket toSend) throws IOException {
+    private void doSend(SeqPacket toSend, long timeout, TimeUnit timeoutUnit) throws IOException, TimeoutException {
         ensureOpen();
 
         if (!isSendTaskRunning)
@@ -308,7 +317,10 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         LOGGER.trace("[{}] {}", name, outPacketQueue.size());
 
         try {
-            ThreadPools.getUninterruptibly(didSend);
+            if(timeout == -1)
+                ThreadPools.getUninterruptibly(didSend);
+            else
+                ThreadPools.getUninterruptibly(didSend, timeout, timeoutUnit);
         } catch (ExecutionException e) {
             throw rethrowIOException(e.getCause() != null ? e.getCause() : e, "Failed to send packet " + toSend);
         }
@@ -322,7 +334,7 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         }
     }
 
-    private SeqPacket doReceiveWithTimeout(Predicate<SeqPacket> filter, int timeout, TimeUnit unit)
+    private SeqPacket doReceiveWithTimeout(Predicate<SeqPacket> filter, long timeout, TimeUnit unit)
             throws InterruptedException, IOException, TimeoutException {
         ensureOpen();
 
@@ -365,15 +377,32 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         }
     }
 
-    private <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> doSendAndWaitResponse(SeqPacket p, Class<R> replyType)
+    private <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> doSendAndWaitResponse(SeqPacket p,
+                                                                                            Class<R> replyType)
             throws IOException {
+        try {
+            return doSendAndWaitResponse(p, replyType, -1, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
+            throw new AssertionError("Should never happen, there's no timeout", ex);
+        }
+    }
+
+    private <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> doSendAndWaitResponse(SeqPacket p,
+                                                                                            Class<R> replyType,
+                                                                                            long timeout,
+                                                                                            TimeUnit unit)
+            throws IOException, TimeoutException {
         try {
             final long seqN = p.seqN();
             doSend(p);
             LOGGER.trace("[{}] Waiting for {}...", name, replyType);
-            return new PacketReplyContextImpl<>(doReceive(packet -> replyType.isInstance(packet.packet()) &&
+
+            Predicate<SeqPacket> filter = packet -> replyType.isInstance(packet.packet()) &&
                     packet instanceof SeqAckPacket ack &&
-                    ack.seqAck() == seqN));
+                    ack.seqAck() == seqN;
+            return new PacketReplyContextImpl<>(timeout == -1
+                    ? doReceive(filter)
+                    : doReceiveWithTimeout(filter, timeout, unit));
         } catch (InterruptedException e) {
             throw (IOException) new InterruptedIOException("Failed to send packet " + p).initCause(e);
         }
@@ -392,6 +421,15 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
     }
 
     @Override
+    public <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> send(OUT p,
+                                                                          Class<R> replyType,
+                                                                          long timeout, TimeUnit unit)
+            throws IOException, TimeoutException {
+        long seqN = seq.getAndIncrement();
+        return doSendAndWaitResponse(new SimpleSeqPacket(p, seqN), replyType, timeout, unit);
+    }
+
+    @Override
     public <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type) throws IOException {
         try {
             LOGGER.trace("[{}] Waiting for {}...", name, type);
@@ -402,7 +440,7 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
     }
 
     @Override
-    public <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type, int timeout, TimeUnit unit)
+    public <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type, long timeout, TimeUnit unit)
             throws IOException, TimeoutException {
         try {
             LOGGER.trace("[{}] Waiting for {}...", name, type);

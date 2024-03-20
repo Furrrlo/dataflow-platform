@@ -45,7 +45,6 @@ public interface SocketManager<IN extends Packet, ACK_IN extends /* Packet & */ 
      * Wait for an AckPacket of the given type and with {@link SeqAckPacket#seqAck()} ==
      * {@link SimpleSeqPacket#seqN()}
      *
-     *
      * @param p packet to be sent
      * @param replyType type of the AckPacket to wait for
      * @return {@link PacketReplyContext} the context of the received ack
@@ -53,6 +52,27 @@ public interface SocketManager<IN extends Packet, ACK_IN extends /* Packet & */ 
      * @throws InterruptedIOException if interrupted while receiving
      */
     <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> send(OUT p, Class<R> replyType) throws IOException;
+
+    /**
+     * Send a packet and wait for an ack.
+     * The given packet is wrapped in a {@link SimpleSeqPacket} and the
+     * {@link SimpleSeqPacket#seqN()} is set.
+     * The packet is added to a queue to be sent.
+     * Wait for an AckPacket of the given type and with {@link SeqAckPacket#seqAck()} ==
+     * {@link SimpleSeqPacket#seqN()}
+     *
+     * @param p packet to be sent
+     * @param replyType type of the AckPacket to wait for
+     * @param timeout the maximum time to wait
+     * @param unit the time unit of the timeout argument
+     * @return {@link PacketReplyContext} the context of the received ack
+     * @throws IOException if sending fails
+     * @throws InterruptedIOException if interrupted while receiving
+     * @throws TimeoutException if the wait timed out
+     */
+    <R extends ACK_IN> PacketReplyContext<ACK_IN, ACK_OUT, R> send(OUT p,
+                                                                   Class<R> replyType,
+                                                                   long timeout, TimeUnit unit) throws IOException, TimeoutException;
 
     /**
      * Wait for a packet of the given type
@@ -68,11 +88,14 @@ public interface SocketManager<IN extends Packet, ACK_IN extends /* Packet & */ 
      * Wait for a packet of the given type
      *
      * @param type type of the Packet to wait for
+     * @param timeout the maximum time to wait
+     * @param unit the time unit of the timeout argument
      * @return {@link PacketReplyContext} the context of the received packet
      * @throws IOException if receiving fails
      * @throws InterruptedIOException if interrupted while receiving
+     * @throws TimeoutException if the wait timed out
      */
-    <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type, int timeout, TimeUnit unit)
+    <R extends IN> PacketReplyContext<ACK_IN, ACK_OUT, R> receive(Class<R> type, long timeout, TimeUnit unit)
             throws IOException, TimeoutException;
 
     boolean isClosed();
