@@ -35,6 +35,8 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
     private final @Nullable Socket socket;
     private final ObjectOutputStream oos;
     private final ObjectInputStream ois;
+    private final int closeTimeout;
+    private final TimeUnit closeTimeoutUnit;
     private final BlockingDeque<QueuedOutput> outPacketQueue = new LinkedBlockingDeque<>();
     private final NBlockingQueue<Object> inPacketQueue = new NBlockingQueue<>();
 
@@ -54,9 +56,21 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         this(name, executor, socket, socket.getInputStream(), socket.getOutputStream());
     }
 
+    private SocketManagerImpl(String name,
+                              ExecutorService executor,
+                              @Nullable Socket socket,
+                              InputStream is,
+                              OutputStream os) throws IOException {
+        this(name, executor, socket, is, os, PingPacket.TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
     @VisibleForTesting
-    SocketManagerImpl(String name, ExecutorService executor, InputStream is, OutputStream os) throws IOException {
-        this(name, executor, null, is, os);
+    SocketManagerImpl(String name,
+                      ExecutorService executor,
+                      InputStream is,
+                      OutputStream os,
+                      int closeTimeout, TimeUnit closeTimeoutUnit) throws IOException {
+        this(name, executor, null, is, os, closeTimeout, closeTimeoutUnit);
     }
 
     @SuppressWarnings({
@@ -67,12 +81,15 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
                               ExecutorService executor,
                               @Nullable Socket socket,
                               InputStream is,
-                              OutputStream os)
+                              OutputStream os,
+                              int closeTimeout, TimeUnit closeTimeoutUnit)
             throws IOException {
         this.socket = socket;
         this.name = name;
         this.oos = os instanceof ObjectOutputStream oos ? oos : new ObjectOutputStream(os);
         this.ois = is instanceof ObjectInputStream ois ? ois : new ObjectInputStream(is);
+        this.closeTimeout = closeTimeout;
+        this.closeTimeoutUnit = closeTimeoutUnit;
 
         recvTask = executor.submit(ThreadPools.giveNameToTask(n -> n + "[socket-recv]", this::readLoop));
         isRecvTaskRunning = true;
@@ -108,11 +125,11 @@ public class SocketManagerImpl<IN extends Packet, ACK_IN extends /* Packet & */ 
         try {
             var closePacket = this.closePacket;
             if (closePacket == null) {
-                send((OUT) new ClosePacket(), (Class<ACK_IN>) CloseAckPacket.class);
+                send((OUT) new ClosePacket(), (Class<ACK_IN>) CloseAckPacket.class, closeTimeout, closeTimeoutUnit);
             } else {
-                doSend(new SeqAckPacket(new CloseAckPacket(), -1, closePacket.seqN()));
+                doSend(new SeqAckPacket(new CloseAckPacket(), -1, closePacket.seqN()), closeTimeout, closeTimeoutUnit);
             }
-        } catch (IOException ex) {
+        } catch (IOException | TimeoutException ex) {
             // We ignore exceptions on the last ack receival, because the socket may
             // be closed before we are able to read out the last ack packet
             // We don't care about whether the other has received this anyway,
