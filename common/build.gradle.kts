@@ -17,4 +17,5 @@ dependencies {
     testFixturesApi(libs.bundles.testcontainers) {
         exclude(group = libs.junit4.map { it.group }.get())
     }
+    testImplementation(libs.slf4j.simple)
 }
