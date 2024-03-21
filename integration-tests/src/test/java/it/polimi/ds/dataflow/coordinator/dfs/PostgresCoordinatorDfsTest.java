@@ -77,6 +77,11 @@ class PostgresCoordinatorDfsTest {
             }
 
             @Override
+            public String jsonifyJsObj(@Nullable Object t) {
+                return Objects.toString(t);
+            }
+
+            @Override
             public Tuple2 parseJson(String json) {
                 return new Tuple2(json, "");
             }

@@ -9,10 +9,10 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.Record;
 import org.jooq.*;
-import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DefaultConfiguration;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
+import org.openjdk.nashorn.api.scripting.JSObject;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
@@ -87,12 +87,6 @@ public class PostgresDfs implements Dfs {
     public void close() throws IOException {
         if (dataSource instanceof Closeable closeableDs)
             closeableDs.close();
-    }
-
-    protected DataAccessException translateException(DataAccessException ex) {
-        if(Thread.interrupted())
-            throw new UncheckedInterruptedException(ex);
-        throw ex;
     }
 
     @Override
@@ -201,8 +195,9 @@ public class PostgresDfs implements Dfs {
         var table = maybePartition != null && maybePartition.isLocal()
                 ? partitionTableFor(maybePartition)
                 : coordinatorTableFor(file);
+        var jsonAndHash = jsonifyAndHash(tuple);
         ctx.insertInto(table, PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                .values(partitionIdx, hash(tuple), jsonb(serde.jsonify(tuple)))
+                .values(partitionIdx, jsonAndHash.hash(), jsonb(jsonAndHash.json()))
                 .execute();
     }
 
@@ -233,9 +228,11 @@ public class PostgresDfs implements Dfs {
                     int partition = e.getKey();
                     var data = e.getValue();
 
-                    return data.stream().map(tuple -> ctx
-                            .insertInto(coordinatorTableFor(file), PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                            .values(partition, hash(tuple), jsonb(serde.jsonify(tuple))));
+                    return data.stream()
+                            .map(this::jsonifyAndHash)
+                            .map(jsonAndHash -> ctx
+                                    .insertInto(coordinatorTableFor(file), PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
+                                    .values(partition, jsonAndHash.hash(), jsonb(jsonAndHash.json())));
                 }).collect(Collectors.toList())
         ).execute();
 
@@ -250,24 +247,26 @@ public class PostgresDfs implements Dfs {
     protected void doWriteBatchInPartition(DSLContext ctx, DfsFile file, int partitionIdx, Collection<Tuple2> tuples) {
         var maybePartition = file.maybePartitionOf(partitionIdx);
         ctx.batch(tuples.stream()
-                .map(tuple -> ctx
+                .map(this::jsonifyAndHash)
+                .map(jsonAndHash -> ctx
                         .insertInto(maybePartition != null && maybePartition.isLocal()
                                         ? partitionTableFor(maybePartition)
                                         : coordinatorTableFor(file.name()),
                                 PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                        .values(partitionIdx, hash(tuple), jsonb(serde.jsonify(tuple))))
+                        .values(partitionIdx, jsonAndHash.hash(), jsonb(jsonAndHash.json())))
                 .collect(Collectors.toList())
         ).execute();
     }
 
     protected void doWriteBatchInPartition(DSLContext ctx, DfsFilePartitionInfo dstFilePartition, Collection<Tuple2> tuples) {
         ctx.batch(tuples.stream()
-                .map(tuple -> ctx
+                .map(this::jsonifyAndHash)
+                .map(jsonAndHash -> ctx
                         .insertInto(dstFilePartition.isLocal()
                                         ? partitionTableFor(dstFilePartition)
                                         : coordinatorTableFor(dstFilePartition.fileName()),
                                 PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                        .values(dstFilePartition.partition(), hash(tuple), jsonb(serde.jsonify(tuple))))
+                        .values(dstFilePartition.partition(), jsonAndHash.hash(), jsonb(jsonAndHash.json())))
                 .collect(Collectors.toList())
         ).execute();
     }
@@ -294,8 +293,22 @@ public class PostgresDfs implements Dfs {
                 data.map(r -> serde.parseJson(r.get(DATA_COLUMN).data())));
     }
 
+    protected JsonAndHash jsonifyAndHash(Tuple2 tuple) {
+        var key = tuple.key();
+        if(!(key instanceof JSObject))
+            return new JsonAndHash(serde.jsonify(tuple), key.hashCode());
+
+        var keyJson = serde.jsonifyJsObj(key);
+        var valueJson = serde.jsonifyJsObj(tuple.value());
+        return new JsonAndHash(serde.concatJson(keyJson, valueJson), keyJson.hashCode());
+    }
+
+    protected record JsonAndHash(String json, int hash) {
+    }
+
     protected int hash(Tuple2 tuple) {
-        return tuple.key().hashCode();
+        var key = tuple.key();
+        return key instanceof JSObject ? serde.jsonifyJsObj(key).hashCode() : key.hashCode();
     }
 
     protected int calculatePartition(Tuple2 tuple, int partitions) {

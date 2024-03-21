@@ -61,6 +61,15 @@ public class JacksonTuple2Serde implements Tuple2JsonSerde {
     }
 
     @Override
+    public String jsonifyJsObj(@Nullable Object t) {
+        try {
+            return mapper.writeValueAsString(t);
+        } catch (JsonProcessingException e) {
+            throw new UncheckedIOException("Failed to write to json", e);
+        }
+    }
+
+    @Override
     public Tuple2 parseJson(String json) {
         try {
             return mapper.readValue(json, Tuple2.class);

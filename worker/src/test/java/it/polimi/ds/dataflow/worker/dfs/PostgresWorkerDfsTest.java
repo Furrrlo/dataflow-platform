@@ -6,6 +6,7 @@ import it.polimi.ds.dataflow.dfs.Tuple2JsonSerde;
 import it.polimi.ds.dataflow.utils.Closeables;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.*;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -27,6 +28,11 @@ class PostgresWorkerDfsTest {
         @Override
         public String jsonify(Tuple2 t) {
             return t.key().toString();
+        }
+
+        @Override
+        public String jsonifyJsObj(@Nullable Object t) {
+            return Objects.toString(t);
         }
 
         @Override
