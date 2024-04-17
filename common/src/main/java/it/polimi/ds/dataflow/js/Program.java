@@ -88,6 +88,7 @@ public record Program(Src src, List<Op> ops) {
             case FILTER -> new FilterCompiledOp(fn);
             case CHANGE_KEY -> new ChangeKeyCompiledOp(fn);
             case REDUCE -> new ReduceCompiledOp(fn);
+            case ITERATE -> throw new UnsupportedOperationException("Iterate should be handled earlier during parsing");
         };
     }
 }

@@ -3,6 +3,7 @@ type MapFn<K, V, V1> = (k: K, v: V) => V1
 type FilterFn<K, V> = (k: K, v: V) => boolean;
 type ChangeKeyFn<K, V, K1> = (k: K, v: V) => K1;
 type ReduceFn<K, V, V1> = (k: K, vls: [V]) => V1;
+type IterateFn<K, V> = (engine: Engine<K, V>) => Engine<K, V>;
 
 interface EngineSrc {
     lines: (file: string, partitions: Number) => Engine<string, void>
@@ -16,6 +17,7 @@ interface Engine<K, V> {
     filter: (fn: FilterFn<K, V>) => Engine<K, V>,
     changeKey: <K1> (fn: ChangeKeyFn<K, V, K1>) => Engine<K1, V>,
     reduce: <V1> (fn: ReduceFn<K, V, V1>) => Engine<K, V1>,
+    iterate: (iterations: number, fn: IterateFn<K, V>) => Engine<K, V>,
 }
 
 declare var engine: EngineSrc;
