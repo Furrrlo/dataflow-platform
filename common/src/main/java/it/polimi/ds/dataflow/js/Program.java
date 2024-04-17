@@ -2,6 +2,7 @@ package it.polimi.ds.dataflow.js;
 
 import it.polimi.ds.dataflow.src.Src;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.scripting.JSObject;
 import org.openjdk.nashorn.api.scripting.ScriptObjectMirror;
 
@@ -78,7 +79,7 @@ public record Program(Src src, List<Op> ops) {
             throw new IllegalStateException("Compiled function is not a function");
 
         @SuppressWarnings("unchecked")
-        BiFunction<Object, Object, Object> fn = obj instanceof ScriptObjectMirror mirror
+        BiFunction<Object, @Nullable Object, Object> fn = obj instanceof ScriptObjectMirror mirror
                 ? mirror.to(BiFunction.class)
                 : (k, v) -> obj.call(null, k, v);
         return switch (op.kind()) {

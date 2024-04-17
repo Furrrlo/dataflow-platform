@@ -1,15 +1,16 @@
 package it.polimi.ds.dataflow.js;
 
 import it.polimi.ds.dataflow.Tuple2;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 public final class FilterCompiledOp implements CompiledOp, Predicate<Tuple2> {
 
-    private final BiFunction<Object, Object, Object> fn;
+    private final BiFunction<Object, @Nullable Object, @Nullable Object> fn;
 
-    public FilterCompiledOp(BiFunction<Object, Object, Object> fn) {
+    public FilterCompiledOp(BiFunction<Object, @Nullable Object, @Nullable Object> fn) {
         this.fn = fn;
     }
 

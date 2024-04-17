@@ -1,6 +1,7 @@
 package it.polimi.ds.dataflow.js;
 
 import it.polimi.ds.dataflow.Tuple2;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.scripting.ScriptObjectMirror;
 
 import java.util.List;
@@ -11,9 +12,9 @@ import java.util.stream.Collectors;
 
 public final class FlatMapCompiledOp implements CompiledOp, Function<Tuple2, Map<Object, Object>> {
 
-    private final BiFunction<Object, Object, Object> fn;
+    private final BiFunction<Object, @Nullable Object, @Nullable Object> fn;
 
-    public FlatMapCompiledOp(BiFunction<Object, Object, Object> fn) {
+    public FlatMapCompiledOp(BiFunction<Object, @Nullable Object, @Nullable Object> fn) {
         this.fn = fn;
     }
 
