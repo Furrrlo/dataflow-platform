@@ -15,7 +15,7 @@ interface Engine<K, V> {
     map: <V1> (fn: MapFn<K, V, V1>) => Engine<K, V1>,
     filter: (fn: FilterFn<K, V>) => Engine<K, V>,
     changeKey: <K1> (fn: ChangeKeyFn<K, V, K1>) => Engine<K1, V>,
-    reduce: <V1> (fn: ReduceFn<K, V, V1>) => void,
+    reduce: <V1> (fn: ReduceFn<K, V, V1>) => Engine<K, V1>,
 }
 
 declare var engine: EngineSrc;

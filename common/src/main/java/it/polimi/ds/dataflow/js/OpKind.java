@@ -9,7 +9,7 @@ public enum OpKind {
     MAP("map"),
     FILTER("filter"),
     CHANGE_KEY("changeKey", true, false),
-    REDUCE("reduce", false, true);
+    REDUCE("reduce");
 
     public static final @Unmodifiable List<OpKind> VALUES = List.of(values());
 
