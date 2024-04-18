@@ -31,6 +31,10 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
     private static final Object NULL_OBJECT = new Object();
     private static final ProgramNashornTreeVisitor INSTANCE = new ProgramNashornTreeVisitor();
 
+    @SuppressWarnings({
+            "PMD.PreserveStackTrace", // Done on purpose to let checked exception through
+            "PMD.IdenticalCatchBranches", // The two branches throw different checked exceptions, cannot be merged
+    })
     @SuppressFBWarnings("LEST_LOST_EXCEPTION_STACK_TRACE") // Done on purpose to let checked exception through
     public static Program parse(
             String src,
@@ -369,7 +373,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         try (InputStream is = ctx.workDirFileLoader.loadResourceAsStream(otherScriptPath)) {
             otherScriptSrc = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new WrappedIOException(new IOException("Failed to parse invoked program " + otherScriptPath));
+            throw new WrappedIOException(new IOException("Failed to parse invoked program " + otherScriptPath, e));
         }
 
         CompilationUnitTree otherScriptCut = ctx.parser.parse(
@@ -414,14 +418,15 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                 iterateTreeVisitor,
                 new IterateCtx(ctx, iterateBodyParam, new ArrayList<>()));
 
-        for(int i = 0; i < iterations; i++)
+        for(int i = 0; i < iterations; i++) {
             ops.addAll(0, iterationOps);
+        }
     }
 
     private record IterateCtx(Ctx outerCtx, IdentifierTree iterateBodyParam, List<Op> iterationOps) {
     }
 
-    private class IterateTreeVisitor extends ThrowingNashornTreeVisitor<List<Op>, IterateCtx> {
+    private final class IterateTreeVisitor extends ThrowingNashornTreeVisitor<List<Op>, IterateCtx> {
 
         @Override
         protected List<Op> throwIllegalState(Tree node, IterateCtx iterateCtx) {
@@ -547,6 +552,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
             boolean isValidMethod = (mst.getIdentifier().equals("string") ||
                     mst.getIdentifier().equals("number") ||
                     mst.getIdentifier().equals("boolean"));
+            @SuppressWarnings("PMD.UnusedAssignment") // It's a compile error to not initialize it here
             Object firstParam = null;
 
             if(isValidMethod &&

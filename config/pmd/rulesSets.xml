@@ -13,6 +13,7 @@
         <exclude name="OneDeclarationPerLine"/>
         <exclude name="AvoidReassigningParameters"/>
         <exclude name="LiteralsFirstInComparisons"/>
+        <exclude name="SwitchStmtsShouldHaveDefault"/>
     </rule>
     <rule ref="category/java/bestpractices.xml/LooseCoupling">
         <properties>
