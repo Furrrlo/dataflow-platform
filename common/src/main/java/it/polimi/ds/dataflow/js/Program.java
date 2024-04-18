@@ -11,7 +11,6 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.BiFunction;
 
 public record Program(Src src, List<Op> ops) {
@@ -56,22 +55,31 @@ public record Program(Src src, List<Op> ops) {
 
         Object eval = switch (op.kind()) {
             // Double negation to cast to boolean
-            case FILTER -> engine.eval("(function(k, v) { return !!(" + op.body() + ")(k, v); })");
+            case FILTER -> engine.eval(STR."""
+                    (() => {
+                        const fn = (\{op.body()});
+                        return (function(k, v) { return !!fn(k, v); });
+                    })()""");
             // Convert Map to a [[K, V]] array, as I can't seem to extract the first on the java side
-            case FLAT_MAP -> engine.eval(String.format(
-                    Locale.ROOT,
-                    """
-                    (function(k, v) {
-                        let map = (%s)(k, v);
-                        if('entries' in map) {
-                            let arr = [];
-                            for(const e of map.entries()) { arr.push(e); }
-                            return arr;
-                        }
-                        return map;
-                    })""", op.body()));
+            case FLAT_MAP -> engine.eval(STR."""
+                    (() => {
+                        const fn = (\{op.body()});
+                        return (function(k, v) {
+                            let map = fn(k, v);
+                            if('entries' in map) {
+                                let arr = [];
+                                for(const e of map.entries()) { arr.push(e); }
+                                return arr;
+                            }
+                            return map;
+                        });
+                    })()""");
             // Convert from a Java collection to a JS one, don't know why it's not automatic
-            case REDUCE -> engine.eval("(function(k, v) { return (" + op.body() + ")(k, Java.from(v)); })");
+            case REDUCE -> engine.eval(STR."""
+                    (() => {
+                        const fn = (\{op.body()});
+                        return (function(k, v) { return fn(k, Java.from(v)); });
+                    })()""");
             default -> engine.eval(op.body());
         };
 
@@ -88,7 +96,6 @@ public record Program(Src src, List<Op> ops) {
             case FILTER -> new FilterCompiledOp(fn);
             case CHANGE_KEY -> new ChangeKeyCompiledOp(fn);
             case REDUCE -> new ReduceCompiledOp(fn);
-            case ITERATE -> throw new UnsupportedOperationException("Iterate should be handled earlier during parsing");
         };
     }
 }

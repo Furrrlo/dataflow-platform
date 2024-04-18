@@ -5,12 +5,13 @@ import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.List;
 
-public sealed interface CoordinatorSrc extends Src permits DfsSrc, NonPartitionedCoordinatorSrc {
+public sealed interface CoordinatorSrc extends Src permits PartitionedCoordinatorSrc, NonPartitionedCoordinatorSrc {
 
     enum Kind {
         LINES("lines", 2, String.class, Integer.class),
         CSV("csv", 1, String.class, Integer.class, String.class),
-        DFS("dfs", 1, String.class);
+        DFS("dfs", 1, String.class),
+        REQUIRE("requireInput", 0, Void.class);
 
         public static final @Unmodifiable List<Kind> VALUES = List.of(values());
 

@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.util.List;
 
 public enum OpKind {
-    ITERATE("iterate"),
     FLAT_MAP("flatMap", true, false),
     MAP("map"),
     FILTER("filter"),

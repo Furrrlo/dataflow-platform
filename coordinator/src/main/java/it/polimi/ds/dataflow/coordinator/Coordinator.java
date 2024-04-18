@@ -5,6 +5,7 @@ import it.polimi.ds.dataflow.coordinator.dfs.CoordinatorDfs;
 import it.polimi.ds.dataflow.coordinator.js.ProgramNashornTreeVisitor;
 import it.polimi.ds.dataflow.coordinator.src.DfsSrc;
 import it.polimi.ds.dataflow.coordinator.src.NonPartitionedCoordinatorSrc;
+import it.polimi.ds.dataflow.coordinator.src.PartitionedCoordinatorSrc;
 import it.polimi.ds.dataflow.dfs.DfsFile;
 import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.js.Op;
@@ -19,6 +20,7 @@ import org.openjdk.nashorn.api.tree.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.script.ScriptException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -70,7 +72,9 @@ public class Coordinator implements Closeable {
         }
     }
 
-    public DfsFile compileAndExecuteProgram(String programFileName, String src) throws IOException, InterruptedException {
+    public DfsFile compileAndExecuteProgram(String programFileName, String src)
+            throws IOException, InterruptedException, ScriptException {
+
         LOGGER.info("Compiling program {}...", programFileName);
         long startNanos = System.nanoTime();
 
@@ -86,24 +90,26 @@ public class Coordinator implements Closeable {
 
     public DfsFile executeProgram(String programFileName, Program program) throws IOException, InterruptedException {
 
-        if (program.src() instanceof NonPartitionedCoordinatorSrc nonPartitionedSrc) {
-            LOGGER.info("Partitioning program {} source...", programFileName);
-            long startNanos = System.nanoTime();
+        final PartitionedCoordinatorSrc dfsSrc = switch (program.src()) {
+            case NonPartitionedCoordinatorSrc nonPartitionedSrc -> {
+                LOGGER.info("Partitioning program {} source...", programFileName);
+                long startNanos = System.nanoTime();
 
-            program = program.withSrc(partitionFile(
-                    programFileName.endsWith(".js")
-                            ? programFileName.substring(0, programFileName.length() - ".js".length())
-                            : programFileName,
-                    nonPartitionedSrc.requestedPartitions(),
-                    program.src()));
+                var newPartitionedSrc = partitionFile(
+                        programFileName.endsWith(".js")
+                                ? programFileName.substring(0, programFileName.length() - ".js".length())
+                                : programFileName,
+                        nonPartitionedSrc.requestedPartitions(),
+                        program.src());
 
-            LOGGER.info("Partitioned program {} in {} millis",
-                    programFileName,
-                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
-        }
-
-        if (!(program.src() instanceof DfsSrc dfsSrc))
-            throw new IllegalStateException("Only DfsSrc can be scheduled, but there's still " + program.src());
+                LOGGER.info("Partitioned program {} in {} millis",
+                        programFileName,
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
+                yield newPartitionedSrc;
+            }
+            case PartitionedCoordinatorSrc newPartitionedSrc -> newPartitionedSrc;
+            default -> throw new IllegalStateException("Unexpected value: " + program.src());
+        };
 
         LOGGER.info("Executing program {}...", programFileName);
         long startNanos = System.nanoTime();

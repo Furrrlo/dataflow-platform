@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
 
+import javax.script.ScriptException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ProgramNashornTreeVisitorTest {
 
     @Test
-    void parse() throws IOException {
+    void parse() throws IOException, ScriptException {
         final WorkDirFileLoader fileLoader = new WorkDirFileLoader(Paths.get("./"));
         final String programFileName = "word-count.js";
 

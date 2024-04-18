@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.stream.Stream;
 
-public final class DfsSrc implements CoordinatorSrc {
+public final class DfsSrc implements PartitionedCoordinatorSrc {
 
     private final CoordinatorDfs dfs;
     private final String fileName;
@@ -25,6 +25,7 @@ public final class DfsSrc implements CoordinatorSrc {
         this.file = file;
     }
 
+    @Override
     public DfsFile getDfsFile() {
         if(file == null)
             file = dfs.findFile(fileName);
