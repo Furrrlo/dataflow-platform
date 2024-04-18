@@ -400,14 +400,13 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         if(!(node.getArguments().get(1) instanceof FunctionExpressionTree fet) ||
                 fet.getParameters().isEmpty() ||
                 !(fet.getParameters().getFirst() instanceof IdentifierTree iterateBodyParam)) {
-            throwIllegalState(String.format(Locale.ROOT, """
-                            Expected arg 1 of iterate to be a function with at least 1 (identifier) parameter, \
-                            got %s (state: %s)""",
-                            node.getArguments().get(1) instanceof FunctionExpressionTree fet
-                                    ? "parameters " + fet.getParameters()
-                                    : node.getArguments().get(1),
-                            ctx.state),
-                    node, ctx);
+            throwIllegalState(String.format(Locale.ROOT,
+                    "Expected arg 1 of iterate to be a function with at least 1 (identifier) parameter, got %s (state: %s)",
+                    node.getArguments().get(1) instanceof FunctionExpressionTree fet
+                            ? "parameters " + fet.getParameters()
+                            : node.getArguments().get(1),
+                    ctx.state
+            ), node, ctx);
             return;
         }
 
