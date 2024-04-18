@@ -38,10 +38,30 @@ class ProgramNashornTreeVisitorTest {
             throw new UnsupportedOperationException(STR."Failed to compile \{programFileName}");
         var program = ProgramNashornTreeVisitor.parse(src, cut, fileLoader, new UnimplementedDfs());
 
+        String prefix = """
+                (() => {
+                   \s
+                    const engineVars = (() => {
+                        const raw = (name) => {
+                           \s
+                            return undefined;
+                        };
+                        return {
+                            number: (name) => Number(raw(name)),
+                            string: (name) => String(raw(name)),
+                            boolean: (name) => !!raw(name),
+                        };
+                    })();
+                    return\s""";
+        String suffix = """
+                ;
+                })()\
+                """;
+
         assertEquals(
                 new Program(
                         new LinesSrc(fileLoader, "kinglear.txt", 8),
-                        List.of(new Op(OpKind.FLAT_MAP, """
+                        List.of(new Op(OpKind.FLAT_MAP, prefix + """
                                         (function(line, _) {
                                                 let words = /** @type {Map<string, number>} */ new Map();
                                                 line.split(/(\\s+)/).forEach(function(word) {
@@ -51,13 +71,13 @@ class ProgramNashornTreeVisitorTest {
                                                 });
                                                 return words
                                             })\
-                                        """),
-                                new Op(OpKind.CHANGE_KEY, "((word, _) => word.toLowerCase())"),
-                                new Op(OpKind.REDUCE, """
+                                        """ + suffix),
+                                new Op(OpKind.CHANGE_KEY, prefix + "((word, _) => word.toLowerCase())" + suffix),
+                                new Op(OpKind.REDUCE, prefix + """
                                         (function(word, counts) {
                                                 return counts.reduce((a, b) => a + b, 0);
                                             })\
-                                        """))),
+                                        """ + suffix))),
                 program);
     }
 }
