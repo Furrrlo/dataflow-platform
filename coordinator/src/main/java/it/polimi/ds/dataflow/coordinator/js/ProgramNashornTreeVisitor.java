@@ -146,13 +146,11 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                 node, ctx);
     }
 
-    @SuppressWarnings("TrailingWhitespacesInTextBlock")
     private Program throwIllegalState(String msg, Tree node, Ctx ctx) {
-        throw new IllegalStateException(STR."""
-            \{msg} \
-            at \{ctx.sourceName}:\{ctx.lineMap().getLineNumber(node.getStartPosition())}:\
-            \{ctx.lineMap().getColumnNumber(node.getStartPosition())}\
-            """);
+        throw new IllegalStateException(msg +
+                " at " + ctx.sourceName +
+                ":" + ctx.lineMap().getLineNumber(node.getStartPosition()) +
+                ":" + ctx.lineMap().getColumnNumber(node.getStartPosition()));
     }
 
     @Override
@@ -404,8 +402,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                 !(fet.getParameters().getFirst() instanceof IdentifierTree iterateBodyParam)) {
             throwIllegalState(String.format(Locale.ROOT, """
                             Expected arg 1 of iterate to be a function with at least 1 (identifier) parameter, \
-                            got %s (state: %s)\
-                            """,
+                            got %s (state: %s)""",
                             node.getArguments().get(1) instanceof FunctionExpressionTree fet
                                     ? "parameters " + fet.getParameters()
                                     : node.getArguments().get(1),

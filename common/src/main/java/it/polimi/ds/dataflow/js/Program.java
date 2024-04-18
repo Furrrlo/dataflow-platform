@@ -11,6 +11,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BiFunction;
 
 public record Program(Src src, List<Op> ops) {
@@ -55,15 +56,15 @@ public record Program(Src src, List<Op> ops) {
 
         Object eval = switch (op.kind()) {
             // Double negation to cast to boolean
-            case FILTER -> engine.eval(STR."""
+            case FILTER -> engine.eval(String.format(Locale.ROOT, """
                     (() => {
-                        const fn = (\{op.body()});
+                        const fn = (%s);
                         return (function(k, v) { return !!fn(k, v); });
-                    })()""");
+                    })()""", op.body()));
             // Convert Map to a [[K, V]] array, as I can't seem to extract the first on the java side
-            case FLAT_MAP -> engine.eval(STR."""
+            case FLAT_MAP -> engine.eval(String.format(Locale.ROOT, """
                     (() => {
-                        const fn = (\{op.body()});
+                        const fn = (%s);
                         return (function(k, v) {
                             let map = fn(k, v);
                             if('entries' in map) {
@@ -73,13 +74,13 @@ public record Program(Src src, List<Op> ops) {
                             }
                             return map;
                         });
-                    })()""");
+                    })()""", op.body()));
             // Convert from a Java collection to a JS one, don't know why it's not automatic
-            case REDUCE -> engine.eval(STR."""
+            case REDUCE -> engine.eval(String.format(Locale.ROOT, """
                     (() => {
-                        const fn = (\{op.body()});
+                        const fn = (%s);
                         return (function(k, v) { return fn(k, Java.from(v)); });
-                    })()""");
+                    })()""", op.body()));
             default -> engine.eval(op.body());
         };
 
