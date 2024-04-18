@@ -44,6 +44,7 @@
         <exclude name="CommentDefaultAccessModifier"/>
         <exclude name="FieldDeclarationsShouldBeAtStartOfClass"/>
         <exclude name="EmptyMethodInAbstractClassShouldBeAbstract"/>
+        <exclude name="UseExplicitTypes"/>
     </rule>
     <rule ref="category/java/codestyle.xml/ControlStatementBraces">
         <properties>
@@ -72,10 +73,8 @@
         <exclude name="ExcessiveImports"/>
         <exclude name="CognitiveComplexity"/>
         <exclude name="CyclomaticComplexity"/>
-        <exclude name="ExcessiveClassLength"/>
         <exclude name="ExcessivePublicCount"/>
         <exclude name="LoosePackageCoupling"/>
-        <exclude name="ExcessiveMethodLength"/>
         <exclude name="CouplingBetweenObjects"/>
         <exclude name="AvoidRethrowingException"/>
         <exclude name="AbstractClassWithoutAnyMethod"/>
@@ -93,7 +92,6 @@
     <rule ref="category/java/errorprone.xml">
         <exclude name="CloseResource"/>
         <exclude name="DontImportSun"/>
-        <exclude name="EmptyWhileStmt"/>
         <exclude name="NullAssignment"/>
         <exclude name="AssignmentInOperand"/>
         <exclude name="UseProperClassLoader"/>

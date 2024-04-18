@@ -7,7 +7,7 @@ testcontainers = "1.19.6"
 
 errorprone = "2.25.0"
 spotbugs = "4.8.3"
-pmd = "7.0.0-rc4"
+pmd = "7.0.0"
 asm = "9.6"
 
 [libraries]
