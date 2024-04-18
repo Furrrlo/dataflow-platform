@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Unmodifiable;
 
 import java.util.List;
 
+@SuppressWarnings("PMD.UnnecessaryFullyQualifiedName") // on OpKind.SHUFFLES, etc. flags. The non-qualified name is a compile error
 public enum OpKind {
     FLAT_MAP("flatMap", OpKind.SHUFFLES),
     MAP("map"),
