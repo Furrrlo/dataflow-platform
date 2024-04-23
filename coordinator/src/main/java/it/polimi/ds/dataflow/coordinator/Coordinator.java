@@ -419,9 +419,11 @@ public class Coordinator implements Closeable {
     }
 
     public boolean ifJobAlreadyDone(String programFileName) {
-        return dfs.findFile(programFileName.endsWith(".js")
+        return !dfs.findFile(
+                programFileName.endsWith(".js")
                 ? programFileName.substring(0, programFileName.length() - ".js".length())
-                : programFileName).partitions().isEmpty();
+                : programFileName
+        ).partitions().isEmpty();
     }
 
     public void deletePreviousJob(String programFileName) {
