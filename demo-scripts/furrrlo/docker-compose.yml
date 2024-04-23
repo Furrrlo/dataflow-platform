@@ -1,0 +1,68 @@
+version: "2.2"
+
+services:
+  postgres-coordinator:
+    image: postgres:15.6
+    volumes:
+      - "pgdata-coordinator:/var/lib/postgresql/data"
+      - ./coordinator-init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd.postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: "pg_isready --username=postgres && psql --username=postgres --list"
+      timeout: 10s
+      retries: 20
+  dataflow-platform-coordinator:
+    image: our-dataflow-coordinator
+    depends_on:
+      postgres-coordinator:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    environment:
+      - DATAFLOW_PG_USER=postgres
+      - DATAFLOW_PG_PASSWORD=pwd.postgres
+      - DATAFLOW_PG_URL=jdbc:postgresql://postgres-coordinator/postgres
+      - DATAFLOW_DFS_NODE_NAME=coordinator
+      - DATAFLOW_LISTENING_PORT=6666
+    ports:
+      - "6666:6666"
+  postgres-worker:
+    image: postgres:15.6
+    volumes:
+      - "pgdata-worker:/var/lib/postgresql/data"
+      - ./worker-init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_USER=furrrlogres
+      - POSTGRES_PASSWORD=pwd.furrrlogres
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: "pg_isready --username=furrrlogres && psql --username=furrrlogres --list"
+      timeout: 10s
+      retries: 20
+  dataflow-platform-worker:
+    image: our-dataflow-worker
+    depends_on: 
+      dataflow-platform-coordinator:
+        condition: service_started
+      postgres-worker:
+        condition: service_healthy
+    environment:
+      - DATAFLOW_PG_USER=furrrlogres
+      - DATAFLOW_PG_PASSWORD=pwd.furrrlogres
+      - DATAFLOW_PG_URL=jdbc:postgresql://postgres-worker/furrrlogres
+      - DATAFLOW_UUID=d9737767-deee-4636-9cb2-6c8c681fc480
+      - DATAFLOW_DFS_NODE_NAME=furrrlo
+      - DATAFLOW_DFS_COORDINATOR_NAME=coordinator
+      - DATAFLOW_COORDINATOR_IP=furrrlo
+      - DATAFLOW_COORDINATOR_PORT=6666
+
+volumes:
+  pgdata-coordinator:
+    driver: local
+  pgdata-worker:
+    driver: local

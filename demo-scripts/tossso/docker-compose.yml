@@ -1,0 +1,35 @@
+version: "2.2"
+
+services:
+  postgres-worker:
+    image: postgres:15.6
+    volumes:
+      - "pgdata-worker:/var/lib/postgresql/data"
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_USER=fnufogres
+      - POSTGRES_PASSWORD=pwd.fnufogres
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: "pg_isready --username=fnufogres && psql --username=fnufogres --list"
+      timeout: 10s
+      retries: 20
+  dataflow-platform-worker:
+    image: our-dataflow-worker
+    depends_on:
+      postgres-worker:
+        condition: service_healthy
+    environment:
+      - DATAFLOW_PG_USER=fnufogres
+      - DATAFLOW_PG_PASSWORD=pwd.fnufogres
+      - DATAFLOW_PG_URL=jdbc:postgresql://postgres-worker/fnufogres
+      - DATAFLOW_UUID=3805045a-0415-4a04-afd9-2982d9dba351
+      - DATAFLOW_DFS_NODE_NAME=tossso
+      - DATAFLOW_DFS_COORDINATOR_NAME=coordinator
+      - DATAFLOW_COORDINATOR_IP=furrrlo
+      - DATAFLOW_COORDINATOR_PORT=6666
+
+volumes:
+  pgdata-worker:
+    driver: local
