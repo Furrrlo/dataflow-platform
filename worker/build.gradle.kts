@@ -1,5 +1,7 @@
 plugins {
     application
+    id("dataflow-platform.java")
+    id("dataflow-platform.test")
     id("dataflow-platform.code-quality")
     id("dataflow-platform.database")
 }

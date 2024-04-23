@@ -1,5 +1,6 @@
 plugins {
-    java
+    id("dataflow-platform.java")
+    id("dataflow-platform.test")
 }
 
 dependencies {

@@ -1,6 +1,8 @@
 plugins {
     `java-library`
     `java-test-fixtures`
+    id("dataflow-platform.java")
+    id("dataflow-platform.test")
     id("dataflow-platform.code-quality")
 }
 
