@@ -8,6 +8,7 @@ plugins {
 
 dependencies {
     implementation(projects.common)
+    implementation(libs.logback.classic)
 
     testImplementation(testFixtures(projects.common))
 }

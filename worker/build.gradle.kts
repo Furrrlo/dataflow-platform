@@ -9,6 +9,7 @@ plugins {
 
 dependencies {
     implementation(projects.common)
+    implementation(libs.logback.classic)
     implementation(libs.liquibase)
 
     testImplementation(testFixtures(projects.common))
