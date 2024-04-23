@@ -137,7 +137,13 @@ class CoordinatorTest {
 
                 statement.execute(STR."""
                     CREATE SERVER IF NOT EXISTS \{workerNodeName} FOREIGN DATA WRAPPER postgres_fdw
-                    OPTIONS (host '\{worker.getNetworkAliases().getFirst()}', dbname '\{worker.getDatabaseName()}');
+                    OPTIONS (
+                        host '\{worker.getNetworkAliases().getFirst()}',
+                        dbname '\{worker.getDatabaseName()}',
+                        use_remote_estimate 'true',
+                        fetch_size '50000',
+                        fdw_tuple_cost '0.2'
+                    );
 
                     CREATE USER MAPPING IF NOT EXISTS FOR \{COORDINATOR_NODE.getUsername()} SERVER \{workerNodeName}
                     OPTIONS (user '\{worker.getUsername()}', password '\{worker.getPassword()}');
@@ -154,7 +160,13 @@ class CoordinatorTest {
                     CREATE EXTENSION IF NOT EXISTS postgres_fdw;
 
                     CREATE SERVER IF NOT EXISTS coordinator FOREIGN DATA WRAPPER postgres_fdw
-                    OPTIONS (host '\{COORDINATOR_NODE.getNetworkAliases().getFirst()}', dbname '\{COORDINATOR_NODE.getDatabaseName()}');
+                    OPTIONS (
+                        host '\{COORDINATOR_NODE.getNetworkAliases().getFirst()}',
+                        dbname '\{COORDINATOR_NODE.getDatabaseName()}',
+                        use_remote_estimate 'true',
+                        fetch_size '50000',
+                        fdw_tuple_cost '0.2'
+                    );
 
                     CREATE USER MAPPING IF NOT EXISTS FOR \{workerNode.getUsername()} SERVER coordinator
                     OPTIONS (user '\{COORDINATOR_NODE.getUsername()}', password '\{COORDINATOR_NODE.getPassword()}');
