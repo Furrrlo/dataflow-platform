@@ -351,8 +351,6 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                 })()\
                 """;
 
-        System.out.println(bakedVarsSrc);
-
         var op = new Op(kind, bakedVarsSrc);
         if(ops.isEmpty())
             ops.add(op);
