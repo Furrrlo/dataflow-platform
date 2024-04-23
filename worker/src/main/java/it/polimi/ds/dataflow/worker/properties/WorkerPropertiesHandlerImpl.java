@@ -1,94 +1,57 @@
 package it.polimi.ds.dataflow.worker.properties;
 
+import it.polimi.ds.dataflow.CommonPropertiesHandler;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
-import org.jasypt.encryption.pbe.StandardPBEStringEncryptor;
-import org.jasypt.properties.EncryptableProperties;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Properties;
 import java.util.UUID;
 
-public final class WorkerPropertiesHandlerImpl implements WorkerPropertiesHandler {
+public final class WorkerPropertiesHandlerImpl extends CommonPropertiesHandler implements WorkerPropertiesHandler {
+
+    private static final String DEFAULT_PROPERTIES_FILE_NAME = "worker.properties";
 
     private final Path defaultPropertiesFilePath;
-    private final Properties props;
 
-    @SuppressFBWarnings("HARD_CODE_PASSWORD")
     public WorkerPropertiesHandlerImpl(WorkDirFileLoader fileLoader) throws IOException {
-        StandardPBEStringEncryptor encryptor = new StandardPBEStringEncryptor();
-        encryptor.setPassword("jasypt");
-        this.props = new EncryptableProperties(encryptor);
-        defaultPropertiesFilePath = fileLoader.resolvePath("worker.properties");
-        try (Reader r = Files.newBufferedReader(defaultPropertiesFilePath, StandardCharsets.UTF_8)) {
-            props.load(r);
-        }
+        super(fileLoader.resolvePath(DEFAULT_PROPERTIES_FILE_NAME), "jasypt");
+        defaultPropertiesFilePath = fileLoader.resolvePath(DEFAULT_PROPERTIES_FILE_NAME);
     }
 
     @Override
     @SuppressFBWarnings("EXS_EXCEPTION_SOFTENING_NO_CHECKED")
     public UUID getUuid() {
-        UUID uuid;
-        if (props.getProperty("UUID") != null && !props.getProperty("UUID").isEmpty()) {
-            uuid = UUID.fromString(props.getProperty("UUID"));
-        } else {
-            uuid = UUID.randomUUID();
-            props.setProperty("UUID", uuid.toString());
-            try (Writer w = Files.newBufferedWriter(defaultPropertiesFilePath, StandardCharsets.UTF_8)) {
-                props.store(w, null);
-            } catch (IOException e) {
-                throw new UncheckedIOException("Couldn't save properties", e);
-            }
+        String candidate = getProperty("UUID");
+        if(!candidate.isEmpty())
+            return UUID.fromString(candidate);
+
+        UUID uuid = UUID.randomUUID();
+        props.setProperty("UUID", uuid.toString());
+        try (Writer w = Files.newBufferedWriter(defaultPropertiesFilePath, StandardCharsets.UTF_8)) {
+            props.store(w, null);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Couldn't save properties", e);
         }
         return uuid;
     }
 
     @Override
-    public String getPgPassword() {
-        return props.getProperty("PG_PASSWORD");
-    }
-
-    @Override
-    public String getPgUser() {
-        return props.getProperty("PG_USER");
-    }
-
-    @Override
-    public String getPgUrl() {
-        return props.getProperty("PG_URL");
-    }
-
-    @Override
     public String getDfsCoordinatorName() {
-        return props.getProperty("DFS_COORDINATOR_NAME") != null
-                ? props.getProperty("DFS_COORDINATOR_NAME")
-                : "";
-    }
-
-    //All workers in this way have the same name since the config file it's only one, this shouldn't be a problem
-    //because workers are also uniquely identified through their socket, and during the deployment we can set up different
-    //config files for each worker that we intend to use
-    @Override
-    public String getLocalDfsName() {
-        return props.getProperty("DFS_NODE_NAME") != null
-                ? props.getProperty("DFS_NODE_NAME")
-                : "";
+        return getProperty("DFS_COORDINATOR_NAME");
     }
 
     @Override
     public String getCoordinatorIp() {
-        return props.getProperty("COORDINATOR_IP");
+        return getProperty("COORDINATOR_IP");
     }
 
     @Override
     public int getCoordinatorPort() {
-        return Integer.parseInt(props.getProperty("COORDINATOR_PORT"));
+        return Integer.parseInt(getProperty("COORDINATOR_PORT"));
     }
-
 }

@@ -7,7 +7,6 @@ plugins {
 dependencies {
     implementation(projects.common)
     implementation(libs.liquibase)
-    implementation(libs.jasypt)
 
     testImplementation(testFixtures(projects.common))
 }
