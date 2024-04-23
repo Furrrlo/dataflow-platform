@@ -18,3 +18,10 @@ tasks.withType<JavaCompile>().configureEach {
 tasks.withType<JavaExec>().configureEach {
     jvmArgs("--enable-preview")
 }
+
+tasks.jar {
+    // Since stuff is included as a jar in jib containers,
+    // we want the jar to be built reproducibly.
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}

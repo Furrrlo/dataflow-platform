@@ -63,3 +63,6 @@ plgns-db-jooq = { module = "org.jooq:jooq-codegen-gradle", version.ref = "jooq" 
 plgns-cq-pmd = ["plgns-cq-pmd-core", "plgns-cq-pmd-ant", "plgns-cq-pmd-java"]
 plgns-cq-pmd-asm = ["plgns-cq-pmd-asm", "plgns-cq-pmd-asm-commons"]
 testcontainers = [ "testcontainers-core", "testcontainers-junit", "testcontainers-junit4-mock", "testcontainers-postgres" ]
+
+[plugins]
+jib = { id = "com.google.cloud.tools.jib", version = "3.4.2" }
