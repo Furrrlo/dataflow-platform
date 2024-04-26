@@ -2,7 +2,7 @@ CREATE EXTENSION IF NOT EXISTS postgres_fdw;
 
 CREATE SERVER IF NOT EXISTS coordinator FOREIGN DATA WRAPPER postgres_fdw
 OPTIONS (
-    host 'furrrlo',
+    host 'postgres-coordinator',
     dbname 'postgres',
     use_remote_estimate 'true',
     fetch_size '50000',

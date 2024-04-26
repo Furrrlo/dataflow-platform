@@ -58,7 +58,7 @@ services:
       - DATAFLOW_UUID=d9737767-deee-4636-9cb2-6c8c681fc480
       - DATAFLOW_DFS_NODE_NAME=furrrlo
       - DATAFLOW_DFS_COORDINATOR_NAME=coordinator
-      - DATAFLOW_COORDINATOR_IP=furrrlo
+      - DATAFLOW_COORDINATOR_IP=dataflow-platform-coordinator
       - DATAFLOW_COORDINATOR_PORT=6666
 
 volumes:

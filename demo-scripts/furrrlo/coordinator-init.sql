@@ -3,8 +3,7 @@ CREATE EXTENSION IF NOT EXISTS postgres_fdw;
 -- furrrlo
 CREATE SERVER IF NOT EXISTS furrrlo FOREIGN DATA WRAPPER postgres_fdw
 OPTIONS (
-    host 'furrrlo',
-    port '5433',
+    host 'postgres-worker',
     dbname 'furrrlogres',
     use_remote_estimate 'true',
     fetch_size '50000',
