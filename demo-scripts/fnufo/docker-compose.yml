@@ -7,12 +7,12 @@ services:
       - "pgdata-worker:/var/lib/postgresql/data"
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
-      - POSTGRES_USER=tosssogres
-      - POSTGRES_PASSWORD=pwd.tosssogres
+      - POSTGRES_USER=fnufogres
+      - POSTGRES_PASSWORD=pwd.fnufogres
     ports:
       - "5435:5432"
     healthcheck:
-      test: "pg_isready --username=tosssogres && psql --username=tosssogres --list"
+      test: "pg_isready --username=fnufogres && psql --username=fnufogres --list"
       timeout: 10s
       retries: 20
   dataflow-platform-worker:
@@ -21,9 +21,9 @@ services:
       postgres-worker:
         condition: service_healthy
     environment:
-      - DATAFLOW_PG_USER=tosssogres
-      - DATAFLOW_PG_PASSWORD=pwd.tosssogres
-      - DATAFLOW_PG_URL=jdbc:postgresql://postgres-worker/tosssogres
+      - DATAFLOW_PG_USER=fnufogres
+      - DATAFLOW_PG_PASSWORD=pwd.fnufogres
+      - DATAFLOW_PG_URL=jdbc:postgresql://postgres-worker/fnufogres
       - DATAFLOW_UUID=b5a127b5-76b4-4897-845e-2b01352786d6
       - DATAFLOW_DFS_NODE_NAME=fnufo
       - DATAFLOW_DFS_COORDINATOR_NAME=coordinator
