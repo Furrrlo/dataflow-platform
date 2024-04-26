@@ -13,6 +13,8 @@ import org.jooq.impl.DefaultConfiguration;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.scripting.JSObject;
+import org.postgresql.PGProperty;
+import org.postgresql.ds.common.BaseDataSource;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
@@ -24,7 +26,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.random.RandomGenerator;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -53,6 +54,16 @@ public class PostgresDfs implements Dfs {
 
         var config = new HikariConfig();
         configurator.accept(config);
+        // Enable reWriteBatchedInserts in order to be able to execute optimized FDW queries.
+        // Even when using batching methods, by default a batch query will send n times the same
+        // prepared query with different parameters bound, so fdw will execute them one at a time
+        // even when the batch_size is set to a higher value. In order to fix this, we only use
+        // the PreparedStatement batch api and ask the driver to rewrite the queries as a single
+        // query with a gazilion parameters, so that fdw can properly execute and not one insert at a time
+        if(config.getDataSource() instanceof BaseDataSource pgDs)
+            pgDs.setReWriteBatchedInserts(true);
+        else
+            config.addDataSourceProperty(PGProperty.REWRITE_BATCHED_INSERTS.getName(), true);
         this.dataSource = new HikariDataSource(config);
 
         this.ctx = using(new DefaultConfiguration()
@@ -210,33 +221,9 @@ public class PostgresDfs implements Dfs {
         Map<Integer, List<Tuple2>> batches = tuples.stream().collect(Collectors.groupingBy(
                 e -> calculatePartition(e, file.partitionsNum()),
                 Collectors.toList()));
-
-        Map<Integer, List<Tuple2>> localBatches = file.partitions().stream()
-                .filter(DfsFilePartitionInfo::isLocal)
-                .filter(p -> batches.containsKey(p.partition()))
-                .collect(Collectors.toMap(
-                        DfsFilePartitionInfo::partition,
-                        p -> batches.getOrDefault(p.partition(), List.of())));
-        Map<Integer, List<Tuple2>> nonLocalBatches = batches.keySet().stream()
-                .filter(p -> !localBatches.containsKey(p))
-                .collect(Collectors.toMap(
-                        Function.identity(),
-                        p -> batches.getOrDefault(p, List.of())));
-
-        ctx.batch(
-                nonLocalBatches.entrySet().stream().flatMap(e -> {
-                    int partition = e.getKey();
-                    var data = e.getValue();
-
-                    return data.stream()
-                            .map(this::jsonifyAndHash)
-                            .map(jsonAndHash -> ctx
-                                    .insertInto(coordinatorTableFor(file), PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                                    .values(partition, jsonAndHash.hash(), jsonb(jsonAndHash.json())));
-                }).collect(Collectors.toList())
-        ).execute();
-
-        localBatches.forEach((partition, data) -> doWriteBatchInPartition(ctx, file, partition, data));
+        // Execute even non-local queries as batches divided by partition, so that we can use
+        // the PreparedStatements batching API. See note in doWriteBatchInPartition
+        batches.forEach((partition, data) -> doWriteBatchInPartition(ctx, file, partition, data));
     }
 
     @Override
@@ -246,29 +233,37 @@ public class PostgresDfs implements Dfs {
 
     protected void doWriteBatchInPartition(DSLContext ctx, DfsFile file, int partitionIdx, Collection<Tuple2> tuples) {
         var maybePartition = file.maybePartitionOf(partitionIdx);
-        ctx.batch(tuples.stream()
-                .map(this::jsonifyAndHash)
-                .map(jsonAndHash -> ctx
-                        .insertInto(maybePartition != null && maybePartition.isLocal()
-                                        ? partitionTableFor(maybePartition)
-                                        : coordinatorTableFor(file.name()),
-                                PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                        .values(partitionIdx, jsonAndHash.hash(), jsonb(jsonAndHash.json())))
-                .collect(Collectors.toList())
-        ).execute();
+        // Use the PreparedStatements batching API instead of the more convenient single statement
+        // api so that the driver can rewrite it as a single query when reWriteBatchedInserts=true
+        // See note on reWriteBatchedInserts to know why it's needed
+        var batch = ctx.batch(ctx
+                .insertInto(maybePartition != null && maybePartition.isLocal()
+                                ? partitionTableFor(maybePartition)
+                                : coordinatorTableFor(file.name()),
+                        PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
+                .values(null, null, jsonb(null)));
+        for (Tuple2 tuple : tuples) {
+            JsonAndHash jsonAndHash = jsonifyAndHash(tuple);
+            batch = batch.bind(partitionIdx, jsonAndHash.hash(), jsonb(jsonAndHash.json()));
+        }
+        batch.execute();
     }
 
     protected void doWriteBatchInPartition(DSLContext ctx, DfsFilePartitionInfo dstFilePartition, Collection<Tuple2> tuples) {
-        ctx.batch(tuples.stream()
-                .map(this::jsonifyAndHash)
-                .map(jsonAndHash -> ctx
-                        .insertInto(dstFilePartition.isLocal()
-                                        ? partitionTableFor(dstFilePartition)
-                                        : coordinatorTableFor(dstFilePartition.fileName()),
-                                PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
-                        .values(dstFilePartition.partition(), jsonAndHash.hash(), jsonb(jsonAndHash.json())))
-                .collect(Collectors.toList())
-        ).execute();
+        // Use the PreparedStatements batching API instead of the more convenient single statement
+        // api so that the driver can rewrite it as a single query when reWriteBatchedInserts=true
+        // See note on reWriteBatchedInserts to know why it's needed
+        var batch = ctx.batch(ctx
+                .insertInto(dstFilePartition.isLocal()
+                                ? partitionTableFor(dstFilePartition)
+                                : coordinatorTableFor(dstFilePartition.fileName()),
+                        PARTITION_COLUMN, KEY_HASH_COLUMN, DATA_COLUMN)
+                .values(null, null, jsonb(null)));
+        for (Tuple2 tuple : tuples) {
+            JsonAndHash jsonAndHash = jsonifyAndHash(tuple);
+            batch = batch.bind(dstFilePartition.partition(), jsonAndHash.hash(), jsonb(jsonAndHash.json()));
+        }
+        batch.execute();
     }
 
     @Override

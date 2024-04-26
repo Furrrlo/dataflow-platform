@@ -123,6 +123,7 @@ class PostgresCoordinatorDfsTest {
                         dbname '\{worker.getDatabaseName()}',
                         use_remote_estimate 'true',
                         fetch_size '50000',
+                        batch_size '50000',
                         fdw_tuple_cost '0.2'
                     );
 
@@ -146,6 +147,7 @@ class PostgresCoordinatorDfsTest {
                         dbname '\{COORDINATOR_NODE.getDatabaseName()}',
                         use_remote_estimate 'true',
                         fetch_size '50000',
+                        batch_size '50000',
                         fdw_tuple_cost '0.2'
                     );
                     

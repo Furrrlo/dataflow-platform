@@ -8,6 +8,7 @@ OPTIONS (
     dbname 'furrrlogres',
     use_remote_estimate 'true',
     fetch_size '50000',
+	batch_size '50000',
     fdw_tuple_cost '0.2'
 );
 
@@ -22,6 +23,7 @@ OPTIONS (
     dbname 'tosssogres',
     use_remote_estimate 'true',
     fetch_size '50000',
+	batch_size '50000',
     fdw_tuple_cost '0.2'
 );
 
@@ -36,6 +38,7 @@ OPTIONS (
     dbname 'fnufogres',
     use_remote_estimate 'true',
     fetch_size '50000',
+	batch_size '50000',
     fdw_tuple_cost '0.2'
 );
 
