@@ -9,6 +9,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=pwd.postgres
+#    command: ["postgres", "-c", "log_statement=all"]
     ports:
       - "5432:5432"
     healthcheck:
@@ -38,6 +39,7 @@ services:
     environment:
       - POSTGRES_USER=furrrlogres
       - POSTGRES_PASSWORD=pwd.furrrlogres
+#    command: ["postgres", "-c", "log_statement=all"]
     ports:
       - "5433:5432"
     healthcheck:
