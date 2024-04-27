@@ -25,6 +25,8 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
+    volumes:
+      - ./workspace/:/root/dataflow-workspace/
     environment:
       - DATAFLOW_PG_USER=postgres
       - DATAFLOW_PG_PASSWORD=pwd.postgres

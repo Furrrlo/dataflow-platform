@@ -26,5 +26,6 @@ jib {
     }
     container {
         jvmFlags = listOf("--enable-preview")
+        workingDirectory = "/root/dataflow-workspace/"
     }
 }
