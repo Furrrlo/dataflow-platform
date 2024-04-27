@@ -143,7 +143,7 @@ class PostgresWorkerDfsTest {
                         "yay", "yay_1", 1, "localhost", true),
                 1);
         // Deleting the row
-        DFS.deleteBackup(1, 1);
+        DFS.deleteBackupAndFiles(1, List.of());
         // Table should be empty
         try (var conn = createDataSourceFor(WORKER_NODE).getConnection()) {
             DSLContext ctx = DSL.using(conn);

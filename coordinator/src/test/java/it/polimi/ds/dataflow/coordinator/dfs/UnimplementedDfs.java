@@ -29,7 +29,7 @@ public class UnimplementedDfs implements CoordinatorDfs {
     }
 
     @Override
-    public void deleteFile(String name) {
+    public void deleteFile(DfsFile file) {
         throw new UnsupportedOperationException("Not implemented");
     }
 
