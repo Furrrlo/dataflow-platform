@@ -16,13 +16,13 @@ import org.jspecify.annotations.Nullable;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
-import java.util.Collection;
-import java.util.SequencedCollection;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.FOREIGN;
 import static it.polimi.ds.dataflow.dfs.PostgresDfs.DfsFileTable.IF_NOT_EXISTS;
@@ -121,6 +121,18 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
     }
 
     @Override
+    @SuppressWarnings("SqlSourceToSinkFlow")
+    public void deleteFile(DfsFile file) {
+        ctx.query(
+                ctx.dropTableIfExists(file.name()).getSQL().replaceFirst(
+                        STR."(?i)\{Pattern.quote("DROP TABLE")}",
+                        "DROP FOREIGN TABLE")
+        ).execute();
+
+        super.deleteFile(file);
+    }
+
+    @Override
     public @Nullable RestoredBackupInfo loadBackupInfo(int jobId, int partition, String dfsDstFileName) {
         return ctx.select(DATAFLOW_JOBS.DSTFILEPARTITION, DATAFLOW_JOBS.NEXTBATCHPTR)
                 .from(DATAFLOW_JOBS)
@@ -183,13 +195,24 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
                 .toList();
     }
 
-    //TODO: Verify if it's needed
     @Override
-    public void deleteBackup(int jobId, int partition) {
-        ctx.delete(DATAFLOW_JOBS)
-                .where(DATAFLOW_JOBS.WORKER.eq(uuid)
-                        .and(DATAFLOW_JOBS.JOBID.eq(jobId))
-                        .and(DATAFLOW_JOBS.PARTITION.eq(partition)))
-                .execute();
+    public void deleteBackupAndFiles(int jobId, Collection<DfsFile> exclude) {
+        final Set<String> excludedPartitionFileNames = exclude.stream()
+                .flatMap(f -> f.partitions().stream())
+                .filter(DfsFilePartitionInfo::isLocal)
+                .map(DfsFilePartitionInfo::partitionFileName)
+                .collect(Collectors.toUnmodifiableSet());
+
+        List<String> partitions = ctx.delete(DATAFLOW_JOBS)
+                .where(DATAFLOW_JOBS.JOBID.eq(jobId))
+                .returningResult(DATAFLOW_JOBS.DSTFILEPARTITION)
+                .fetch()
+                .map(r -> r.get(DATAFLOW_JOBS.DSTFILEPARTITION));
+
+        ctx.batch(partitions.stream()
+                .filter(partitionFileName -> !excludedPartitionFileNames.contains(partitionFileName))
+                .map(ctx::dropTable)
+                .toList()
+        ).execute();
     }
 }

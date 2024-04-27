@@ -129,6 +129,12 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     }
 
     @Override
+    public void deleteFile(DfsFile file) {
+        ctx.dropTableIfExists(file.name()).execute();
+        super.deleteFile(file);
+    }
+
+    @Override
     public @MustBeClosed Stream<Tuple2> loadAll(DfsFile file) {
         return ctx.select(DATA_COLUMN)
                 .from(coordinatorTableFor(file))

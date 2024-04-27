@@ -123,6 +123,10 @@ public final class Worker implements Closeable {
                                 yield null;
                             }
                             case CreateFilePartitionPacket pkt -> onCreateFilePartition(pkt);
+                            case CleanupIntermediateFilesPacket pkt -> {
+                                onCleanupIntermediateFiles(pkt);
+                                yield null;
+                            }
                             case PingPacket _ -> new PongPacket();
                         };
                         if(replyPkt != null)
@@ -181,7 +185,7 @@ public final class Worker implements Closeable {
 
         try {
             var engine = engineFactory.create();
-            var dfsSrcFile = dfs.findFile(pkt.dfsSrcFileName(), pkt.partitions(), pkt.dfsSrcPartitionNames());
+            var dfsSrcFile = dfs.findFile(pkt.dfsSrcFile());
             var restoredBackup = dfs.loadBackupInfo(pkt.jobId(), pkt.partition(), pkt.dfsDstFileName());
 
             // Create the partition in which we are going to put the results
@@ -251,6 +255,16 @@ public final class Worker implements Closeable {
             return;
 
         task.cancel(true);
+    }
+
+    private void onCleanupIntermediateFiles(CleanupIntermediateFilesPacket pkt) {
+        var srcFile = dfs.findFile(pkt.srcFile());
+        if(srcFile != null)
+            dfs.deleteFile(srcFile);
+
+        dfs.deleteBackupAndFiles(
+                pkt.jobId(),
+                pkt.exclude().stream().map(dfs::findFile).toList());
     }
 
     /**

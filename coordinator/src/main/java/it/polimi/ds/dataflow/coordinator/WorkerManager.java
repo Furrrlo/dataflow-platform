@@ -3,10 +3,14 @@ package it.polimi.ds.dataflow.coordinator;
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManager;
 import it.polimi.ds.dataflow.coordinator.socket.CoordinatorSocketManagerImpl;
 import it.polimi.ds.dataflow.coordinator.socket.PingPongHandler;
+import it.polimi.ds.dataflow.dfs.DfsFile;
+import it.polimi.ds.dataflow.dfs.DfsFilePartitionInfo;
 import it.polimi.ds.dataflow.socket.packets.HelloPacket;
+import it.polimi.ds.dataflow.socket.packets.NetDfsFileInfo;
 import it.polimi.ds.dataflow.socket.packets.PingPacket;
 import it.polimi.ds.dataflow.utils.Closeables;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Unmodifiable;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -208,6 +212,17 @@ public final class WorkerManager implements Closeable {
         return workers.stream()
                 .filter(w -> equalsIgnoreCase.test(w.getDfsNodeName()))
                 .toList();
+    }
+
+    @Contract("_, null -> null; _, !null -> !null")
+    public @Nullable NetDfsFileInfo createNetDfsFileInfoFor(WorkerClient worker, @Nullable DfsFile srcFile) {
+        return srcFile == null ? null : new NetDfsFileInfo(
+                srcFile.name(),
+                srcFile.partitionsNum(),
+                srcFile.partitions().stream()
+                        .filter(p -> p.dfsNodeName().equals(worker.getDfsNodeName()))
+                        .map(DfsFilePartitionInfo::partitionFileName)
+                        .toList());
     }
 
     private record ReconnectListenerKey(UUID uuid, int jobId, int partition) {

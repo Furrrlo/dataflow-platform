@@ -15,6 +15,7 @@ import it.polimi.ds.dataflow.src.Src;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.ExceptionlessAutoCloseable;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.jspecify.annotations.Nullable;
 import org.openjdk.nashorn.api.tree.CompilationUnitTree;
 import org.openjdk.nashorn.api.tree.Parser;
 import org.slf4j.Logger;
@@ -168,6 +169,11 @@ public class Coordinator implements Closeable {
             }
 
             DfsFile dstDfsFile = dfs.createPartitionedFile(dstDfsFileName, dstPartitions);
+            // We have this step result file, we can clean up the previous step, so currDfsFile
+            tryCleanupIntermediateDfsFileAsync(
+                    jobId,
+                    step == 0 ? null : currDfsFile, // Avoid deleting the data source
+                    List.of(dstDfsFile));
 
             if (currOps.stream().anyMatch(o -> o.kind().isShuffles())) {
                 LOGGER.info("Reshuffling");
@@ -215,12 +221,7 @@ public class Coordinator implements Closeable {
         final Function<WorkerClient, ScheduleJobPacket> pktFactory = worker -> new ScheduleJobPacket(
                 jobId,
                 ops,
-                srcFile.name(),
-                srcFile.partitionsNum(),
-                srcFile.partitions().stream()
-                        .filter(p -> p.dfsNodeName().equals(worker.getDfsNodeName()))
-                        .map(DfsFilePartitionInfo::partitionFileName)
-                        .toList(),
+                workerManager.createNetDfsFileInfoFor(worker, srcFile),
                 srcPartition.partition(),
                 dstDfsFileName);
 
@@ -324,7 +325,7 @@ public class Coordinator implements Closeable {
 
         boolean reschedule = numOfRunningTasks.decrementAndGet() == 0;
         if (reschedule)
-            rescheduleJobPartitionInScopeFork(scope, pkt.dfsSrcFileName(), pktFactory, numOfRunningTasks);
+            rescheduleJobPartitionInScopeFork(scope, pkt.dfsSrcFile().dfsFileName(), pktFactory, numOfRunningTasks);
 
         // If it disconnects and reconnects, we want to make it pick it up from where it left off
         WorkerClient reconnected = workerManager
@@ -378,6 +379,25 @@ public class Coordinator implements Closeable {
                         .min(Comparator.comparingInt(WorkerClient::getCurrentScheduledJobs)));
     }
 
+    private void tryCleanupIntermediateDfsFileAsync(int jobId,
+                                                    @Nullable DfsFile srcFile,
+                                                    List<DfsFile> exclude) {
+        if(srcFile != null)
+            dfs.deleteFile(srcFile);
+
+        workerManager.getWorkers().forEach(w -> threadPool.execute(() -> {
+            try {
+                w.getSocket().send(new CleanupIntermediateFilesPacket(
+                        jobId,
+                        workerManager.createNetDfsFileInfoFor(w, srcFile),
+                        exclude.stream().map(file -> workerManager.createNetDfsFileInfoFor(w, file)).toList()
+                ));
+            } catch (IOException _) {
+                // We do not care that much about this, if the other side receives it great, otherwise dc
+            }
+        }));
+    }
+
     private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws IOException, InterruptedException {
         var dfsFile = partitionFile(dfsName, partitionsNum);
         try (var tuples = src.loadAll()) {
@@ -427,8 +447,8 @@ public class Coordinator implements Closeable {
     }
 
     public void deletePreviousJob(String programFileName) {
-        dfs.deleteFile(programFileName.endsWith(".js")
+        dfs.deleteFile(dfs.findFile(programFileName.endsWith(".js")
                 ? programFileName.substring(0, programFileName.length() - ".js".length())
-                : programFileName);
+                : programFileName));
     }
 }

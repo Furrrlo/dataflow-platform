@@ -196,6 +196,16 @@ public class PostgresDfs implements Dfs {
     }
 
     @Override
+    public void deleteFile(DfsFile file) {
+        ctx.batch(file.partitions().stream()
+                .filter(DfsFilePartitionInfo::isLocal)
+                .map(DfsFilePartitionInfo::partitionFileName)
+                .map(ctx::dropTable)
+                .collect(Collectors.toList())
+        ).execute();
+    }
+
+    @Override
     public void write(DfsFile file, Tuple2 tuple) {
         writeInPartition(file, tuple, calculatePartition(tuple, file.partitionsNum()));
     }
@@ -436,9 +446,5 @@ public class PostgresDfs implements Dfs {
         public static final Field<Object> OID = field(PG_FOREIGN_SERVER.getQualifiedName().append("oid"));
         public static final Field<String> SRVNAME =
                 field(PG_FOREIGN_SERVER.getQualifiedName().append("srvname"), SQLDataType.VARCHAR);
-    }
-    @Override
-    public void deleteFile(String name) {
-        ctx.dropTable(name).execute();
     }
 }

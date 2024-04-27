@@ -7,7 +7,7 @@ import java.util.List;
 public record ScheduleJobPacket(
         int jobId,
         List<Op> ops,
-        String dfsSrcFileName, int partitions, List<String> dfsSrcPartitionNames,
+        NetDfsFileInfo dfsSrcFile,
         int partition,
         String dfsDstFileName
 ) implements CoordinatorRequestPacket {
@@ -16,9 +16,7 @@ public record ScheduleJobPacket(
     public String toString() {
         return "ScheduleJobPacket{" +
                 "jobId=" + jobId +
-                ", dfsSrcFileName='" + dfsSrcFileName + '\'' +
-                ", partitions=" + partitions +
-                ", dfsSrcPartitionNames=" + dfsSrcPartitionNames +
+                ", dfsSrcFile='" + dfsSrcFile + '\'' +
                 ", partition=" + partition +
                 ", dfsDstFileName='" + dfsDstFileName + '\'' +
                 '}';
