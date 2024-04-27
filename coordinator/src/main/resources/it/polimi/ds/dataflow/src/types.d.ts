@@ -28,7 +28,6 @@ interface EngineSrc {
     csv: (file: string, partitions: Number, delimeter?: string) => Engine<string, string>
     dfs: (file: string) => Engine<string, string>
     requireInput: <K, V> (fn?: (engine: Engine<unknown, unknown>) => Engine<K, V>) => Engine<K, V>,
-    run: (file: string) => Engine<any, any>,
 }
 
 interface Engine<K, V> {
@@ -38,6 +37,7 @@ interface Engine<K, V> {
     changeKey: <K1> (fn: ChangeKeyFn<K, V, K1>) => Engine<K1, V>,
     reduce: <V1> (fn: ReduceFn<K, V, V1>) => Engine<K, V1>,
     iterate: (iterations: number, fn: IterateFn<K, V>) => Engine<K, V>,
+    run: (file: string) => Engine<any, any>,
 }
 
 declare var engineVars: EngineVars;
