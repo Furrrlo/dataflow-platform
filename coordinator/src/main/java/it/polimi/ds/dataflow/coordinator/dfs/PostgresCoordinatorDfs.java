@@ -125,7 +125,26 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
 
     @Override
     public DfsFile findFile(String name) {
-        return new DfsFile(name, findCandidateFilePartitions(name));
+        var candidates = findCandidateFilePartitions(name);
+        final Map<Integer, List<DfsFilePartitionInfo>> partitions = candidates.stream()
+                .collect(Collectors.groupingBy(DfsFilePartitionInfo::partition));
+
+        var exceptions = IntStream.range(0, candidates.size()).mapToObj(partition -> {
+            var partitionData = partitions.getOrDefault(partition, Collections.emptyList());
+            if(partitionData.isEmpty())
+                return new FastIllegalStateException("Missing partition " + partition);
+            if(partitionData.size() != 1)
+                return new FastIllegalStateException("Multiple partitions for " + partition + ": " + partitionData);
+            return null;
+        }).filter(Objects::nonNull).toList();
+
+        if(!exceptions.isEmpty()) {
+            RuntimeException ex = new IllegalStateException("Found DfsFile for " + name + ", but partition data is inconsistent");
+            exceptions.forEach(ex::addSuppressed);
+            throw ex;
+        }
+
+        return new DfsFile(name, candidates);
     }
 
     @Override
