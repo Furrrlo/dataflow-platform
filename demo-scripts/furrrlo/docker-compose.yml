@@ -62,6 +62,7 @@ services:
       - DATAFLOW_DFS_COORDINATOR_NAME=coordinator
       - DATAFLOW_COORDINATOR_IP=dataflow-platform-coordinator
       - DATAFLOW_COORDINATOR_PORT=6666
+    restart: always
 
 volumes:
   pgdata-coordinator:
