@@ -9,6 +9,7 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.Record;
 import org.jooq.*;
+import org.jooq.impl.DSL;
 import org.jooq.impl.DefaultConfiguration;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
@@ -153,27 +154,43 @@ public class PostgresDfs implements Dfs {
         return partition;
     }
 
-    protected List<DfsFilePartitionInfo> findCandidateFilePartitions(String name) {
+    protected enum CandidateInheritance {
+        YES, NO
+    }
+
+    protected List<DfsFilePartitionInfo> findCandidateFilePartitions(String name, CandidateInheritance inheritance) {
+        boolean searchInheritance = inheritance == CandidateInheritance.YES;
+
         record TmpTableData(String tablename, String srvname, boolean isLocal) {
         }
 
+        var pgOwnerClass = PgClass.PG_CLASS.as("parent");
+        var pgClass = searchInheritance ?
+                PgClass.PG_CLASS
+                        .join(PgInherits.PG_INHERITS).on(PgClass.OID.eq(PgInherits.INHRELID))
+                        .join(pgOwnerClass).on(PgInherits.INHPARENT.eq(PgClass.aliasTable(pgOwnerClass, PgClass.OID))):
+                PgClass.PG_CLASS;
+        var inheritanceCondition = searchInheritance ?
+                PgClass.aliasTable(pgOwnerClass, PgClass.RELNAME).eq(name)
+                        .and(PgClass.RELISPARTITION.eq(Boolean.TRUE)) :
+                DSL.trueCondition();
+
         String tableRegex = STR."^\{name}(_.*|)_(0|[1-9][0-9]*)$";
         return Stream.concat(
-                        // Could use ctx.meta() instead, but it would use a less efficient query
-                        ctx.select(PgTables.TABLENAME)
-                                .from(PgTables.PG_TABLES)
-                                .where(PgTables.SCHEMANAME.notEqual("pg_catalog")
-                                        .and(PgTables.SCHEMANAME.notEqual("information_schema"))
-                                        .and(PgTables.TABLENAME.likeRegex(tableRegex)))
+                        ctx.select(PgClass.RELNAME)
+                                .from(pgClass)
+                                .where(inheritanceCondition
+                                        .and(PgClass.RELNAME.likeRegex(tableRegex))
+                                        .and(PgClass.RELKIND.eq("r")))
                                 .stream()
-                                .map(r -> new TmpTableData(r.get(PgTables.TABLENAME), LOCAL_DFS_NODE_NAME, true)),
+                                .map(r -> new TmpTableData(r.get(PgClass.RELNAME), LOCAL_DFS_NODE_NAME, true)),
                         ctx.select(PgClass.RELNAME, PgForeignServer.SRVNAME)
                                 .from(PgForeignTable.PG_FOREIGN_TABLE
-                                        .join(PgClass.PG_CLASS)
+                                        .join(pgClass)
                                         .on(PgForeignTable.FTRELID.eq(PgClass.OID))
                                         .join(PgForeignServer.PG_FOREIGN_SERVER)
                                         .on(PgForeignTable.FTSERVER.eq(PgForeignServer.OID)))
-                                .where(PgClass.RELNAME.likeRegex(tableRegex))
+                                .where(inheritanceCondition.and(PgClass.RELNAME.likeRegex(tableRegex)))
                                 .stream()
                                 .map(r -> new TmpTableData(
                                         r.get(PgClass.RELNAME),
@@ -415,14 +432,6 @@ public class PostgresDfs implements Dfs {
         }
     }
 
-    private static final class PgTables {
-        public static final Table<Record> PG_TABLES = table(name("pg_catalog").append("pg_tables"));
-
-        public static final Field<String> TABLENAME = field(
-                PG_TABLES.getQualifiedName().append("tablename"), SQLDataType.VARCHAR);
-        public static final Field<Object> SCHEMANAME = field(PG_TABLES.getQualifiedName().append("schemaname"));
-    }
-
     private static final class PgForeignTable {
         public static final Table<Record> PG_FOREIGN_TABLE =
                 table(name("pg_catalog").append("pg_foreign_table"));
@@ -438,6 +447,22 @@ public class PostgresDfs implements Dfs {
         public static final Field<Object> OID = field(PG_CLASS.getQualifiedName().append("oid"));
         public static final Field<String> RELNAME =
                 field(PG_CLASS.getQualifiedName().append("relname"), SQLDataType.VARCHAR);
+        public static final Field<String> RELKIND =
+                field(PG_CLASS.getQualifiedName().append("relkind"), SQLDataType.CHAR);
+        public static final Field<Boolean> RELISPARTITION =
+                field(PG_CLASS.getQualifiedName().append("relispartition"), SQLDataType.BOOLEAN);
+
+        public static <T> Field<T> aliasTable(Table<Record> table, Field<T> field) {
+            return field(table.getQualifiedName().append(field.getQualifiedName().last()), field.getType());
+        }
+    }
+
+    private static final class PgInherits {
+        public static final Table<Record> PG_INHERITS =
+                table(name("pg_catalog").append("pg_inherits"));
+
+        public static final Field<Object> INHRELID = field(PG_INHERITS.getQualifiedName().append("inhrelid"));
+        public static final Field<Object> INHPARENT = field(PG_INHERITS.getQualifiedName().append("inhparent"));
     }
 
     private static final class PgForeignServer {

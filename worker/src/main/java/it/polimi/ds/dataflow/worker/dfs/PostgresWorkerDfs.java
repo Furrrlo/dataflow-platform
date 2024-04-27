@@ -115,7 +115,7 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
 
     @Override
     public DfsFile findFile(String name, int partitions, Collection<String> allowedPartitionNames) {
-        return new DfsFile(name, partitions, findCandidateFilePartitions(name).stream()
+        return new DfsFile(name, partitions, findCandidateFilePartitions(name, CandidateInheritance.NO).stream()
                 .filter(p -> allowedPartitionNames.contains(p.partitionFileName()))
                 .toList());
     }

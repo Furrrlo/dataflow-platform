@@ -125,7 +125,7 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
 
     @Override
     public DfsFile findFile(String name) {
-        var candidates = findCandidateFilePartitions(name);
+        var candidates = findCandidateFilePartitions(name, CandidateInheritance.YES);
         final Map<Integer, List<DfsFilePartitionInfo>> partitions = candidates.stream()
                 .collect(Collectors.groupingBy(DfsFilePartitionInfo::partition));
 
