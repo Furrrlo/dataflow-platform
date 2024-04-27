@@ -9,7 +9,6 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jooq.Record;
 import org.jooq.*;
-import org.jooq.impl.DSL;
 import org.jooq.impl.DefaultConfiguration;
 import org.jooq.impl.SQLDataType;
 import org.jspecify.annotations.Nullable;
@@ -173,7 +172,7 @@ public class PostgresDfs implements Dfs {
         var inheritanceCondition = searchInheritance ?
                 PgClass.aliasTable(pgOwnerClass, PgClass.RELNAME).eq(name)
                         .and(PgClass.RELISPARTITION.eq(Boolean.TRUE)) :
-                DSL.trueCondition();
+                trueCondition();
 
         String tableRegex = STR."^\{name}(_.*|)_(0|[1-9][0-9]*)$";
         return Stream.concat(
