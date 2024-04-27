@@ -63,7 +63,7 @@ public class PostgresDfs implements Dfs {
         if(config.getDataSource() instanceof BaseDataSource pgDs)
             pgDs.setReWriteBatchedInserts(true);
         else
-            config.addDataSourceProperty(PGProperty.REWRITE_BATCHED_INSERTS.getName(), true);
+            config.addDataSourceProperty(PGProperty.REWRITE_BATCHED_INSERTS.getName(), Boolean.TRUE);
         this.dataSource = new HikariDataSource(config);
 
         this.ctx = using(new DefaultConfiguration()
