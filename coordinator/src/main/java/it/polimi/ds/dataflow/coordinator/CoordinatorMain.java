@@ -90,7 +90,7 @@ public final class CoordinatorMain {
             if (coordinator.ifJobAlreadyDone(programFileName)) {
                 String response;
                 do {
-                    System.out.println("Job \"" + programFileName + "\" or another one with the same name already executed.\n" +
+                    logger.warn("Job \"" + programFileName + "\" or another one with the same name already executed.\n" +
                             "Do you want to replace its results?(Y/N)");
                     response = in.nextLine().toLowerCase(Locale.getDefault());
                 } while (!response.equals("n") && !response.equals("y"));
@@ -106,7 +106,8 @@ public final class CoordinatorMain {
             }
 
             try {
-                coordinator.compileAndExecuteProgram(programFileName, src);
+                var resultFile = coordinator.compileAndExecuteProgram(programFileName, src);
+                logger.info("Wrote result into dfs file {}", resultFile);
             } catch (InterruptedException | UncheckedInterruptedException | InterruptedIOException ex) {
                 throw ex;
             } catch (Throwable t) {
