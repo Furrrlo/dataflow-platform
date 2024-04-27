@@ -14,6 +14,8 @@ services:
       - "5432:5432"
     healthcheck:
       test: "pg_isready --username=postgres && psql --username=postgres --list"
+      start_period: 30s
+      interval: 5s
       timeout: 10s
       retries: 20
   dataflow-platform-coordinator:
@@ -44,6 +46,8 @@ services:
       - "5433:5432"
     healthcheck:
       test: "pg_isready --username=furrrlogres && psql --username=furrrlogres --list"
+      start_period: 30s
+      interval: 5s
       timeout: 10s
       retries: 20
   dataflow-platform-worker:

@@ -13,6 +13,8 @@ services:
       - "5435:5432"
     healthcheck:
       test: "pg_isready --username=fnufogres && psql --username=fnufogres --list"
+      start_period: 30s
+      interval: 5s
       timeout: 10s
       retries: 20
   dataflow-platform-worker:
