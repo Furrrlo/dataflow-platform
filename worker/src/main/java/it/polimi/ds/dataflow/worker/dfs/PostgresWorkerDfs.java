@@ -211,7 +211,7 @@ public class PostgresWorkerDfs extends PostgresDfs implements WorkerDfs {
 
         ctx.batch(partitions.stream()
                 .filter(partitionFileName -> !excludedPartitionFileNames.contains(partitionFileName))
-                .map(ctx::dropTable)
+                .map(ctx::dropTableIfExists)
                 .toList()
         ).execute();
     }
