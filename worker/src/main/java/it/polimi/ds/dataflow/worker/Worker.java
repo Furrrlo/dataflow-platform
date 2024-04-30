@@ -194,7 +194,7 @@ public final class Worker implements Closeable {
                     dfs.createTempFilePartition(
                             pkt.dfsDstFileName(),
                             pkt.partition(),
-                            CreateFileOptions.IF_NOT_EXISTS);
+                            CreateFileOptions.FAIL_IF_EXISTS);
 
             // Initialize backup information
             if(restoredBackup == null)
