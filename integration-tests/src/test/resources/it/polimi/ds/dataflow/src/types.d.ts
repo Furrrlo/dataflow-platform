@@ -55,7 +55,7 @@ interface Engine<K, V> {
     changeKey: <K1> (fn: ChangeKeyFn<K, V, K1>) => Engine<K1, V>,
     reduce: <V1> (fn: ReduceFn<K, V, V1>) => Engine<K, V1>,
     iterate: (iterations: number, fn: IterateFn<K, V>) => Engine<K, V>,
-    run: (file: string) => Engine<any, any>,
+    run: (file: string) => Engine<any, any>
 }
 
 declare var engineVars: EngineVars;
