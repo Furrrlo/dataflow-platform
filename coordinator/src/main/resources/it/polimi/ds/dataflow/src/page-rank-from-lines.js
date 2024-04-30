@@ -2,7 +2,7 @@ const inputFile = engineVars.string("inputFile")
 const partitions = engineVars.number("partitions")
 
 engine
-    .lines(inputFile, partitions)
+    .lines({ file: inputFile, partitions })
     // Links are represented as pairs of page IDs which are separated by space characters. Links
     // are separated by new-line characters.<br>
     // For example <code>"1 2\n2 12\n1 12\n42 63"</code> gives four (directed) links (1)->(2),

@@ -7,6 +7,7 @@ import it.polimi.ds.dataflow.js.OpKind;
 import it.polimi.ds.dataflow.js.Program;
 import it.polimi.ds.dataflow.src.Src;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
+import it.polimi.ds.dataflow.utils.FastIllegalStateException;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
 import org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory;
 import org.openjdk.nashorn.api.tree.*;
@@ -19,8 +20,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 @SuppressWarnings({
         "ClassEscapesDefinedScope" // There's no way to get an instance of this class, it can't escape
@@ -28,7 +29,6 @@ import java.util.stream.IntStream;
 public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<Program, ProgramNashornTreeVisitor.Ctx> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProgramNashornTreeVisitor.class);
-    private static final Object NULL_OBJECT = new Object();
     private static final ProgramNashornTreeVisitor INSTANCE = new ProgramNashornTreeVisitor();
 
     @SuppressWarnings({
@@ -151,10 +151,21 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
     }
 
     private Program throwIllegalState(String msg, Tree node, Ctx ctx) {
-        throw new IllegalStateException(msg +
+        return throwIllegalState(msg, node, ctx, Collections.emptyList());
+    }
+
+    private Program throwIllegalState(String msg, Tree node, Ctx ctx, List<Throwable> suppressed) {
+        throw createIllegalStateExc(msg, node, ctx, suppressed, false);
+    }
+
+    private IllegalStateException createIllegalStateExc(String msg, Tree node, Ctx ctx, List<Throwable> suppressed, boolean fast) {
+        msg = msg +
                 " at " + ctx.sourceName +
                 ":" + ctx.lineMap().getLineNumber(node.getStartPosition()) +
-                ":" + ctx.lineMap().getColumnNumber(node.getStartPosition()));
+                ":" + ctx.lineMap().getColumnNumber(node.getStartPosition());
+        var ex = fast ? new FastIllegalStateException(msg) : new IllegalStateException(msg);
+        suppressed.forEach(ex::addSuppressed);
+        throw ex;
     }
 
     @Override
@@ -472,31 +483,72 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                     return new AssertionError("Not reachable");
                 });
 
-        if(node.getArguments().size() < kind.getMinArgs() || node.getArguments().size() > kind.getMaxArgs())
-            return throwIllegalState(mst.getExpression(), ctx);
+        final ObjectLiteralTree olt = kind == CoordinatorSrc.Kind.REQUIRE ?
+                null :
+                node.getArguments().size() == 1 && node.getArguments().getFirst() instanceof ObjectLiteralTree olt0 ?
+                        olt0 :
+                        null;
+        if(switch (kind) {
+            case REQUIRE -> node.getArguments().size() > 1 ||
+                    (node.getArguments().size() == 1 && !(node.getArguments().getFirst() instanceof FunctionExpressionTree));
+            default -> olt == null && kind.getMinArgs() != 0;
+        }) {
+            return throwIllegalState(String.format(Locale.ROOT,
+                            kind == CoordinatorSrc.Kind.REQUIRE
+                                    ? "Expected a fn literal arg for src %s, got %s"
+                                    : "Expected only an object literal arg for src %s, got %s",
+                            kind, node.getArguments().size() == 1
+                                    ? node.getArguments().getFirst()
+                                    : node.getArguments()),
+                    node, ctx);
+        }
 
-        final List<Object> parsedArgs = IntStream.range(0, node.getArguments().size())
-                .mapToObj(argIdx -> {
-                    var expectedType = kind.getArgs().get(argIdx);
-                    return expectedType.equals(Void.class) ?
-                            NULL_OBJECT :
-                            parseLiteral(
+        final Map<String, Object> parsedArgs = olt == null ? Collections.emptyMap() : olt.getProperties().stream()
+                .filter(pt -> pt.getKey() instanceof IdentifierTree)
+                .collect(Collectors.toMap(
+                        pt -> ((IdentifierTree) pt.getKey()).getName(),
+                        pt -> {
+                            final String argName = ((IdentifierTree) pt.getKey()).getName();
+                            final var expectedArg = kind.getArgs().get(argName);
+                            if(expectedArg == null)
+                                return new FastIllegalStateException("Unknown property " + argName  + " for src " + kind);
+
+                            return tryParseLiteral(
                                     ctx,
-                                    node.getArguments().get(argIdx),
-                                    "arg " + argIdx + " of src " + kind,
-                                    expectedType);
-                })
-                .toList();
+                                    pt.getValue(),
+                                    "property " + argName  + " of src " + kind,
+                                    expectedArg.type());
+                        }));
 
+        final List<Throwable> exs = olt == null ? new ArrayList<>() : olt.getProperties().stream()
+                .filter(pt -> !(pt.getKey() instanceof IdentifierTree))
+                .map(pt -> new FastIllegalStateException("Unexpected property " + pt))
+                .collect(Collectors.toList());
+        exs.addAll(parsedArgs.values().stream()
+                .filter(Throwable.class::isInstance)
+                .map(Throwable.class::cast)
+                .toList());
+        exs.addAll(kind.getArgs().values().stream()
+                .filter(a -> a.required() && parsedArgs.get(a.name()) == null)
+                .map(a -> new FastIllegalStateException("Missing required argument " + a.name()))
+                .toList());
+
+        if(!exs.isEmpty())
+            return throwIllegalState("Invalid src operator usage for " + kind, node, ctx, exs);
+
+        Function<String, Object> requireArg = name -> Objects.requireNonNull(parsedArgs.get(name));
         CoordinatorSrc src = switch (kind) {
-            case LINES -> new LinesSrc(ctx.workDirFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
-            case CSV -> switch (parsedArgs.size()) {
-                case 2 ->  new CsvSrc(ctx.workDirFileLoader(), (String) parsedArgs.getFirst(), (int) parsedArgs.get(1));
-                case 3 ->  new CsvSrc(ctx.workDirFileLoader(),
-                        (String) parsedArgs.getFirst(), (int) parsedArgs.get(1), (String) parsedArgs.get(2));
-                default -> throw new AssertionError("Unexpected parsing error, unrecognized params " + parsedArgs);
-            };
-            case DFS -> new DfsSrc(ctx.dfs(), (String) parsedArgs.getFirst());
+            case LINES -> new LinesSrc(
+                    ctx.workDirFileLoader(),
+                    (String) requireArg.apply("file"),
+                    (int) requireArg.apply("partitions")
+            );
+            case CSV -> new CsvSrc(
+                    ctx.workDirFileLoader(),
+                    (String) requireArg.apply("file"),
+                    (int) requireArg.apply("partitions"),
+                    (String) parsedArgs.get("delimiter"));
+            case DFS -> new DfsSrc(ctx.dfs(), (String) requireArg.apply("file"));
             case REQUIRE -> new RequireSrc();
         };
 
@@ -521,15 +573,32 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                 .orElse(ctx.candidateSrcs.getFirst());
         return new Program(pickedSrc, ctx.ops());
     }
-    
+
     @SuppressWarnings("unchecked")
-    @SuppressFBWarnings("ITC_INHERITANCE_TYPE_CHECKING") // Literally what the method is supposed to be doing
     private <T> T parseLiteral(Ctx ctx, ExpressionTree node, String literalName, Class<T> expectedType) {
+        return (T) doParseLiteral(ctx, node, literalName, expectedType, true);
+    }
+
+    private Object tryParseLiteral(Ctx ctx, ExpressionTree node, String literalName, Class<?> expectedType) {
+        return doParseLiteral(ctx, node, literalName, expectedType, false);
+    }
+
+    @SuppressFBWarnings({
+            "ITC_INHERITANCE_TYPE_CHECKING", // Literally what the method is supposed to be doing
+            "URV_UNRELATED_RETURN_VALUES", // Which is why you shouldn't use this directly, a bit of a mess
+    })
+    private Object doParseLiteral(
+            Ctx ctx,
+            ExpressionTree node,
+            String literalName,
+            Class<?> expectedType,
+            boolean throwErrors
+    ) {
 
         Object wrongValue = node;
         if (node instanceof LiteralTree lt) {
             if(expectedType.isInstance(lt.getValue()))
-                return (T) lt.getValue();
+                return lt.getValue();
 
             wrongValue = lt.getValue();
         }
@@ -537,7 +606,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
         Object candidate = null;
         if (node instanceof IdentifierTree id) {
             if((candidate = ctx.constants.get(id.getName())) != null && expectedType.isInstance(candidate))
-                return (T) candidate;
+                return candidate;
 
             wrongValue = candidate != null ? candidate : "unknown identifier " + id.getName();
         }
@@ -559,7 +628,7 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
                     (firstParam = firstArgLt.getValue()) instanceof String engineVarName &&
                     (candidate = ctx.engineVars.get(engineVarName)) != null &&
                     expectedType.isInstance(candidate))
-                return (T) candidate;
+                return candidate;
 
             wrongValue = !isValidMethod ?
                     "unknown engineVars function " + mst.getIdentifier() :
@@ -571,11 +640,16 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
 
         }
 
-        throwIllegalState(String.format(Locale.ROOT,
-                        "Expected %s to be a literal %s, got %s (state: %s)",
-                        literalName, expectedType, wrongValue, ctx.state),
-                node, ctx);
-        throw new AssertionError("Not reachable");
+        var msg = String.format(Locale.ROOT,
+                "Expected %s to be a literal %s, got %s (state: %s)",
+                literalName, expectedType, wrongValue, ctx.state);
+
+        if(throwErrors) {
+            throwIllegalState(msg, node, ctx);
+            throw new AssertionError("Not reachable");
+        }
+
+        return createIllegalStateExc(msg, node, ctx, Collections.emptyList(), true);
     }
 
     @SuppressFBWarnings(

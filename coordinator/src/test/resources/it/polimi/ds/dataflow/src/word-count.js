@@ -1,5 +1,8 @@
 engine
-    .lines("kinglear.txt", 8)
+    .lines({
+        file: "kinglear.txt",
+        partitions: 8,
+    })
     .flatMap(function(line, _) {
         let words = /** @type {Map<string, number>} */ new Map();
         line.split(/(\s+)/).forEach(function(word) {

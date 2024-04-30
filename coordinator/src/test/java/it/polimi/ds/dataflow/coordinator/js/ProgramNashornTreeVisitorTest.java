@@ -95,7 +95,7 @@ class ProgramNashornTreeVisitorTest {
                 const flag = false;
                 
                 engine
-                    .lines(fileName, partitions)
+                    .lines({ file: fileName, partitions })
                     .map((line) => {
                         return flag ? dble : line;
                     });
@@ -153,7 +153,10 @@ class ProgramNashornTreeVisitorTest {
                 """;
         String src2 = """
                 engine
-                    .lines(engineVars.string('fileName'), engineVars.number('partitions'))
+                    .lines({
+                        file: engineVars.string('fileName'),
+                        partitions: engineVars.number('partitions'),
+                    })
                     .map((line) => {
                         return engineVars.boolean('flag') ? engineVars.number('dble') : line;
                     });

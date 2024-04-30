@@ -16,10 +16,6 @@ public final class CsvSrc implements NonPartitionedCoordinatorSrc {
     private final int partitions;
     private final @Nullable String delimiter;
 
-    public CsvSrc(WorkDirFileLoader loader, String fileName, int partitions) {
-        this(loader, fileName, partitions, null);
-    }
-
     public CsvSrc(WorkDirFileLoader loader, String fileName, int partitions, @Nullable String delimiter) {
         this.loader = loader;
         this.fileName = fileName;

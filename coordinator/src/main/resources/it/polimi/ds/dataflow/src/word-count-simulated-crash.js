@@ -1,5 +1,5 @@
 engine
-    .lines("kinglear.txt", 8)
+    .lines({ file: "kinglear.txt", partitions: 8 })
     .flatMap(function(line, _) {
         if(Math.random() < 0.0005)
             throw simulateCrash();

@@ -1,4 +1,4 @@
 engine
-    .lines("kinglear.txt", 8)
+    .lines({ file: "kinglear.txt", partitions: 8 })
     .run('word-count2.js')
 
