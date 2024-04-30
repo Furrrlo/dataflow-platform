@@ -15,12 +15,21 @@ public final class CsvSrc implements NonPartitionedCoordinatorSrc {
     private final String fileName;
     private final int partitions;
     private final @Nullable String delimiter;
+    private final @Nullable String srcDfsFile;
+    private final @Nullable String dstDfsFile;
 
-    public CsvSrc(WorkDirFileLoader loader, String fileName, int partitions, @Nullable String delimiter) {
+    public CsvSrc(WorkDirFileLoader loader,
+                  String fileName,
+                  int partitions,
+                  @Nullable String delimiter,
+                  @Nullable String srcDfsFile,
+                  @Nullable String dstDfsFile) {
         this.loader = loader;
         this.fileName = fileName;
         this.partitions = partitions;
         this.delimiter = delimiter;
+        this.srcDfsFile = srcDfsFile;
+        this.dstDfsFile = dstDfsFile;
     }
 
     @Override
@@ -31,5 +40,15 @@ public final class CsvSrc implements NonPartitionedCoordinatorSrc {
     @Override
     public int requestedPartitions() {
         return partitions;
+    }
+
+    @Override
+    public @Nullable String requestedDstDfsFileName() {
+        return srcDfsFile;
+    }
+
+    @Override
+    public @Nullable String requestedSrcDfsFileName() {
+        return dstDfsFile;
     }
 }

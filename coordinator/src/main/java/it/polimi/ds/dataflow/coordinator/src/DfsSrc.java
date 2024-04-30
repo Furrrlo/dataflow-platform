@@ -13,16 +13,19 @@ public final class DfsSrc implements PartitionedCoordinatorSrc {
     private final CoordinatorDfs dfs;
     private final String fileName;
     private @Nullable DfsFile file;
+    private final @Nullable String dstDfsFileName;
 
-    public DfsSrc(CoordinatorDfs dfs, String fileName) {
+    public DfsSrc(CoordinatorDfs dfs, String fileName, @Nullable String dstDfsFileName) {
         this.dfs = dfs;
         this.fileName = fileName;
+        this.dstDfsFileName = dstDfsFileName;
     }
 
-    public DfsSrc(CoordinatorDfs dfs, DfsFile file) {
+    public DfsSrc(CoordinatorDfs dfs, DfsFile file, @Nullable String dstDfsFileName) {
         this.dfs = dfs;
         this.fileName = file.name();
         this.file = file;
+        this.dstDfsFileName = dstDfsFileName;
     }
 
     @Override
@@ -30,6 +33,11 @@ public final class DfsSrc implements PartitionedCoordinatorSrc {
         if(file == null)
             file = dfs.findFile(fileName);
         return file;
+    }
+
+    @Override
+    public @Nullable String getRequestedDstDfsFileName() {
+        return dstDfsFileName;
     }
 
     @Override

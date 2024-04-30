@@ -3,6 +3,7 @@ package it.polimi.ds.dataflow.coordinator.src;
 import it.polimi.ds.dataflow.Tuple2;
 import it.polimi.ds.dataflow.src.WorkDirFileLoader;
 import it.polimi.ds.dataflow.utils.SuppressFBWarnings;
+import org.jspecify.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,11 +18,19 @@ public final class LinesSrc implements NonPartitionedCoordinatorSrc {
     private final WorkDirFileLoader loader;
     private final String fileName;
     private final int partitions;
+    private final @Nullable String srcDfsFile;
+    private final @Nullable String dstDfsFile;
 
-    public LinesSrc(WorkDirFileLoader loader, String fileName, int partitions) {
+    public LinesSrc(WorkDirFileLoader loader,
+                    String fileName,
+                    int partitions,
+                    @Nullable String srcDfsFile,
+                    @Nullable String dstDfsFile) {
         this.loader = loader;
         this.fileName = fileName;
         this.partitions = partitions;
+        this.srcDfsFile = srcDfsFile;
+        this.dstDfsFile = dstDfsFile;
     }
 
     @Override
@@ -50,18 +59,30 @@ public final class LinesSrc implements NonPartitionedCoordinatorSrc {
     }
 
     @Override
+    public @Nullable String requestedDstDfsFileName() {
+        return dstDfsFile;
+    }
+
+    @Override
+    public @Nullable String requestedSrcDfsFileName() {
+        return srcDfsFile;
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         LinesSrc linesSrc = (LinesSrc) o;
         return partitions == linesSrc.partitions &&
                 Objects.equals(loader, linesSrc.loader) &&
-                Objects.equals(fileName, linesSrc.fileName);
+                Objects.equals(fileName, linesSrc.fileName) &&
+                Objects.equals(srcDfsFile, linesSrc.srcDfsFile) &&
+                Objects.equals(dstDfsFile, linesSrc.dstDfsFile);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(loader, fileName, partitions);
+        return Objects.hash(loader, fileName, partitions, srcDfsFile, dstDfsFile);
     }
 
     @Override
@@ -70,6 +91,8 @@ public final class LinesSrc implements NonPartitionedCoordinatorSrc {
                 "loader=" + loader +
                 ", fileName='" + fileName + '\'' +
                 ", partitions=" + partitions +
+                ", srcDfsFile='" + srcDfsFile + '\'' +
+                ", dstDfsFile='" + dstDfsFile + '\'' +
                 '}';
     }
 }

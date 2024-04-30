@@ -14,13 +14,18 @@ public sealed interface CoordinatorSrc extends Src permits PartitionedCoordinato
     enum Kind {
         LINES("lines",
                 Arg.required("file", String.class),
-                Arg.required("partitions", Integer.class)),
+                Arg.required("partitions", Integer.class),
+                Arg.optional("srcDfsFile", String.class),
+                Arg.optional("dstDfsFile", String.class)),
         CSV("csv",
                 Arg.required("file", String.class),
                 Arg.required("partitions", Integer.class),
-                Arg.optional("delimiter", String.class)),
+                Arg.optional("delimiter", String.class),
+                Arg.optional("srcDfsFile", String.class),
+                Arg.optional("dstDfsFile", String.class)),
         DFS("dfs",
-                Arg.required("file", String.class)),
+                Arg.required("file", String.class),
+                Arg.optional("dstDfsFile", String.class)),
         REQUIRE("requireInput" /* Its args are special in the parser */);
 
         public static final @Unmodifiable List<Kind> VALUES = List.of(values());

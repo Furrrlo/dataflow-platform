@@ -96,12 +96,16 @@ public class Coordinator implements Closeable {
                 LOGGER.info("Partitioning program {} source...", programFileName);
                 long startNanos = System.nanoTime();
 
+                var requestedSrcDfsFileName = nonPartitionedSrc.requestedSrcDfsFileName();
                 var newPartitionedSrc = partitionFile(
-                        programFileName.endsWith(".js")
-                                ? programFileName.substring(0, programFileName.length() - ".js".length())
-                                : programFileName,
+                        requestedSrcDfsFileName != null ?
+                                requestedSrcDfsFileName :
+                                programFileName.endsWith(".js")
+                                        ? programFileName.substring(0, programFileName.length() - ".js".length())
+                                        : programFileName,
                         nonPartitionedSrc.requestedPartitions(),
-                        program.src());
+                        program.src(),
+                        nonPartitionedSrc.requestedDstDfsFileName());
 
                 LOGGER.info("Partitioned program {} in {} millis",
                         programFileName,
@@ -127,7 +131,10 @@ public class Coordinator implements Closeable {
             long startStepTime = System.nanoTime();
 
             final var currDfsFile = currDfsFile0;
-            final var dstDfsFileName = dfsFilesPrefix + "_step" + step;
+            final var isLastStep = remainingOps.isEmpty();
+            final var dstDfsFileName = isLastStep && dfsSrc.getRequestedDstDfsFileName() != null
+                    ? dfsSrc.getRequestedDstDfsFileName()
+                    : dfsFilesPrefix + "_step" + step;
 
             int jobId = currentJobNumber.getAndIncrement();
             final List<DfsFilePartitionInfo> dstPartitions;
@@ -398,12 +405,15 @@ public class Coordinator implements Closeable {
         }));
     }
 
-    private DfsSrc partitionFile(String dfsName, int partitionsNum, Src src) throws IOException, InterruptedException {
+    private DfsSrc partitionFile(String dfsName,
+                                 int partitionsNum,
+                                 Src src,
+                                 @Nullable String dstDfsName) throws IOException, InterruptedException {
         var dfsFile = partitionFile(dfsName, partitionsNum);
         try (var tuples = src.loadAll()) {
             dfs.writeBatch(dfsFile, tuples.toList());
         }
-        return new DfsSrc(dfs, dfsFile);
+        return new DfsSrc(dfs, dfsFile, dstDfsName);
     }
 
     private DfsFile partitionFile(String dfsName, int partitionsNum) throws InterruptedException, IOException {

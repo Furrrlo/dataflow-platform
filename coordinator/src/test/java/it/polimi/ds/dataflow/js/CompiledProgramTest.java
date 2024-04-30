@@ -24,7 +24,7 @@ class CompiledProgramTest {
         final ScriptEngine engine = new NashornScriptEngineFactory().getScriptEngine("--language=es6", "-doe");
 
         CompiledProgram program = new Program(
-                new LinesSrc(fileLoader, "kinglear.txt", 8),
+                new LinesSrc(fileLoader, "kinglear.txt", 8, null, null),
                 List.of(new Op(OpKind.FLAT_MAP, """
                                 (function(line, _) {
                                         let words = /** @type {Map<string, number>} */ new Map();

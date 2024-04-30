@@ -24,9 +24,27 @@ interface EngineVars {
 }
 
 interface EngineSrc {
-    lines: (obj: { file: string, partitions: Number }) => Engine<string, void>
-    csv: (obj: { file: string, partitions: Number, delimiter?: string }) => Engine<string, string>
-    dfs: (obj: { file: string }) => Engine<string, string>
+
+    lines: (obj: {
+        file: string,
+        partitions: Number,
+        srcDfsFile?: string,
+        dstDfsFile?: string,
+    }) => Engine<string, void>
+
+    csv: (obj: {
+        file: string,
+        partitions: Number,
+        delimiter?: string,
+        srcDfsFile?: string,
+        dstDfsFile?: string,
+    }) => Engine<string, string>
+
+    dfs: (obj: {
+        file: string,
+        dstDfsFile?: string,
+    }) => Engine<string, string>
+
     requireInput: <K, V> (fn?: (engine: Engine<unknown, unknown>) => Engine<K, V>) => Engine<K, V>,
 }
 

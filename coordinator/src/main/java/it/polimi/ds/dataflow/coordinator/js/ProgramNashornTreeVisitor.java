@@ -541,14 +541,23 @@ public final class ProgramNashornTreeVisitor extends ThrowingNashornTreeVisitor<
             case LINES -> new LinesSrc(
                     ctx.workDirFileLoader(),
                     (String) requireArg.apply("file"),
-                    (int) requireArg.apply("partitions")
+                    (int) requireArg.apply("partitions"),
+                    (String) parsedArgs.get("srcDfsFile"),
+                    (String) parsedArgs.get("dstDfsFile")
             );
             case CSV -> new CsvSrc(
                     ctx.workDirFileLoader(),
                     (String) requireArg.apply("file"),
                     (int) requireArg.apply("partitions"),
-                    (String) parsedArgs.get("delimiter"));
-            case DFS -> new DfsSrc(ctx.dfs(), (String) requireArg.apply("file"));
+                    (String) parsedArgs.get("delimiter"),
+                    (String) parsedArgs.get("srcDfsFile"),
+                    (String) parsedArgs.get("dstDfsFile")
+            );
+            case DFS -> new DfsSrc(
+                    ctx.dfs(),
+                    (String) requireArg.apply("file"),
+                    (String) parsedArgs.get("dstDfsFile")
+            );
             case REQUIRE -> new RequireSrc();
         };
 

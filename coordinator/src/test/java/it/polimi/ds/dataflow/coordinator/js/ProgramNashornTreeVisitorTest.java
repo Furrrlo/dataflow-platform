@@ -61,7 +61,7 @@ class ProgramNashornTreeVisitorTest {
 
         assertEquals(
                 new Program(
-                        new LinesSrc(fileLoader, "kinglear.txt", 8),
+                        new LinesSrc(fileLoader, "kinglear.txt", 8, null, null),
                         List.of(new Op(OpKind.FLAT_MAP, prefix + """
                                         (function(line, _) {
                                                 let words = /** @type {Map<string, number>} */ new Map();
@@ -95,7 +95,7 @@ class ProgramNashornTreeVisitorTest {
                 const flag = false;
                 
                 engine
-                    .lines({ file: fileName, partitions })
+                    .lines({ file: fileName, partitions, srcDfsFile: "hey", })
                     .map((line) => {
                         return flag ? dble : line;
                     });
@@ -107,7 +107,7 @@ class ProgramNashornTreeVisitorTest {
 
         assertEquals(
                 new Program(
-                        new LinesSrc(fileLoader, "file.txt", 16),
+                        new LinesSrc(fileLoader, "file.txt", 16, "hey", null),
                         List.of(new Op(OpKind.MAP, """
                                 (() => {
                                     const fileName = "file.txt";
@@ -156,6 +156,7 @@ class ProgramNashornTreeVisitorTest {
                     .lines({
                         file: engineVars.string('fileName'),
                         partitions: engineVars.number('partitions'),
+                        dstDfsFile: "hey",
                     })
                     .map((line) => {
                         return engineVars.boolean('flag') ? engineVars.number('dble') : line;
@@ -178,7 +179,7 @@ class ProgramNashornTreeVisitorTest {
 
         assertEquals(
                 new Program(
-                        new LinesSrc(fileLoader, "file.txt", 16),
+                        new LinesSrc(fileLoader, "file.txt", 16, null, "hey"),
                         List.of(new Op(OpKind.MAP, """
                                 (() => {
                                    \s
