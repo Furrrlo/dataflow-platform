@@ -116,6 +116,9 @@ public class Coordinator implements Closeable {
             default -> throw new IllegalStateException("Unexpected value: " + program.src());
         };
 
+        if(dfsSrc.getRequestedDstDfsFileName() != null)
+            dfs.validateFileName(dfsSrc.getRequestedDstDfsFileName());
+
         LOGGER.info("Executing program {}...", programFileName);
         long startNanos = System.nanoTime();
 

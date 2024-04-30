@@ -49,8 +49,16 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     }
 
     @Override
+    public void validateFileName(String name) {
+        if(name.length() > FILE_NAME_MAX_LEN)
+            throw new IllegalStateException("DFS filename " + name + " cannot be longer than " + FILE_NAME_MAX_LEN + " characters");
+    }
+
+    @Override
     @SuppressWarnings({"TrailingWhitespacesInTextBlock"})
     public DfsFile createPartitionedFilePreemptively(String name, int partitions) {
+        validateFileName(name);
+
         createCoordinatorTable(ctx, LOCAL_DFS_NODE_NAME, name, 0).execute();
 
         var foreignServers = List.copyOf(this.foreignServers);

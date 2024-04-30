@@ -39,6 +39,7 @@ public class PostgresDfs implements Dfs {
 
     protected static final String LOCAL_DFS_NODE_NAME = "localhost";
     protected static final int POSTGRES_IDENTIFIER_MAX_LEN = 63;
+    protected static final int FILE_NAME_MAX_LEN = 32; // Keep a bunch of space for our stuff
 
     protected final DataSource dataSource;
     protected final DSLContext ctx;

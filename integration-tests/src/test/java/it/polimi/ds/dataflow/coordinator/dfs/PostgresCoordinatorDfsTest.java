@@ -168,14 +168,14 @@ class PostgresCoordinatorDfsTest {
 
     @Test
     void createPartitionedFilePreemptively() {
-        String file = "createPartitionedFilePreemptively";
+        String file = "createFilePreemptively";
         DfsFile partitionedFile = COORDINATOR_DFS.createPartitionedFilePreemptively(file, 4);
         assertEquals(partitionedFile, COORDINATOR_DFS.findFile(file));
     }
 
     @Test
     void createPreemptivelyAndWritePartitionedFileAndPartitions() {
-        String file = "createPreemptivelyAndWritePartitionedFileAndPartitions";
+        String file = "createFilePreemptivelyAndWrite";
         DfsFile coordinatorPartitionedFile;
         try {
             coordinatorPartitionedFile = COORDINATOR_DFS.createPartitionedFilePreemptively(file, 4);

@@ -64,6 +64,11 @@ public class UnimplementedDfs implements CoordinatorDfs {
     }
 
     @Override
+    public void validateFileName(String fileName) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
     public @Unmodifiable DfsFile createPartitionedFilePreemptively(String name, int partitions) {
         throw new UnsupportedOperationException("Not implemented");
     }

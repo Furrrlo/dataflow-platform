@@ -12,6 +12,8 @@ import java.util.stream.Stream;
 
 public interface CoordinatorDfs extends Dfs {
 
+    void validateFileName(String fileName);
+
     @Unmodifiable DfsFile createPartitionedFilePreemptively(String name, int partitions);
 
     @Unmodifiable DfsFile createPartitionedFile(String name, SequencedCollection<DfsFilePartitionInfo> partitions);
