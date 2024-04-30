@@ -420,9 +420,23 @@ public class PostgresDfs implements Dfs {
                                                 Table<Record> table,
                                                 @MagicConstant(flags = {IF_NOT_EXISTS}) int flags) {
             boolean ifNotExists = (flags & IF_NOT_EXISTS) != 0;
+
+            var niceSuffix = "_keyhash_btree_index";
+            var badSuffix = "_keyhshBtrIdx";
+
+            var suffix = table.getName().length() < POSTGRES_IDENTIFIER_MAX_LEN - niceSuffix.length()
+                    ? niceSuffix
+                    : badSuffix;
+            var truncatedTableName = table.getName().length() + suffix.length() > POSTGRES_IDENTIFIER_MAX_LEN
+                    // Truncate from the front 'cause that's where the shared parts of the names are
+                    ? table.getName().substring(
+                            table.getName().length() + suffix.length() - POSTGRES_IDENTIFIER_MAX_LEN)
+                    : table.getName();
+            var indexName = truncatedTableName + suffix;
+
             return ctx.query(STR."""
                      CREATE INDEX \{ifNotExists ? "IF NOT EXISTS " : ""}\
-                     \{ctx.render(name(table.getName() + "_keyhash_btree_index"))} \
+                     \{ctx.render(name(indexName))} \
                      ON \{ctx.render(table)} \
                      USING btree (\{ctx.render(KEY_HASH_COLUMN)} ASC)\
                      """);
