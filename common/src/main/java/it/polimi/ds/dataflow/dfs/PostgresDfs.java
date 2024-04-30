@@ -146,7 +146,7 @@ public class PostgresDfs implements Dfs {
                                                          int partitionIdx,
                                                          CreateFileOptions... options) {
         boolean failIfExists = Arrays.stream(options).noneMatch(o -> o == CreateFileOptions.IF_NOT_EXISTS);
-        if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.FAIL_IF_EXISTS))
+        if (failIfExists && Arrays.stream(options).anyMatch(o -> o == CreateFileOptions.IF_NOT_EXISTS))
             throw new IllegalStateException("FAIL_IF_EXISTS and IF_NOT_EXISTS cannot be specified together");
 
         var partition = new DfsFilePartitionInfo(file, partitionFile, partitionIdx, LOCAL_DFS_NODE_NAME, true);
