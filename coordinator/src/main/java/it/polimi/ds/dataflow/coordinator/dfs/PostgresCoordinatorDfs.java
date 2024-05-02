@@ -59,6 +59,9 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
     public DfsFile createPartitionedFilePreemptively(String name, int partitions) {
         validateFileName(name);
 
+        if(exists(name))
+            throw new IllegalStateException("File " + name + " already exists");
+
         createCoordinatorTable(ctx, LOCAL_DFS_NODE_NAME, name, 0).execute();
 
         var foreignServers = List.copyOf(this.foreignServers);
@@ -133,6 +136,9 @@ public class PostgresCoordinatorDfs extends PostgresDfs implements CoordinatorDf
 
     @Override
     public DfsFile findFile(String name) {
+        if(!exists(name))
+            throw new IllegalStateException("File " + name + " does not exist");
+
         var candidates = findCandidateFilePartitions(name, CandidateInheritance.YES);
         final Map<Integer, List<DfsFilePartitionInfo>> partitions = candidates.stream()
                 .collect(Collectors.groupingBy(DfsFilePartitionInfo::partition));

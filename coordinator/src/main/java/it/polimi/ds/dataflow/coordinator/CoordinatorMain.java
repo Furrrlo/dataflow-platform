@@ -18,7 +18,6 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
-import java.util.Locale;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
 
@@ -77,27 +76,6 @@ public final class CoordinatorMain {
             if (!fileLoader.resourceExists(programFileName)) {
                 logger.error("File not found");
                 continue;
-            }
-
-            //Possible alternative to this are:
-            //  1) Create new job's table only if it doesn't exist already one with the same name.
-            //     The problem is that we don't have a discriminant to decide whether keeping the old results or computing the newer ones
-            //  2) Instead of dropping the job's table, deleting all rows in it for whatever reason.
-            //  3) Allows the user to insert only different job's names without the possibility to use the older ones.
-            //     In this case the problem would be the explosion of the DB content, which could be solvable by starting
-            //     a "garbage collector" entity that every few seconds/minutes/... the oldest tables. (but this would increase
-            //     the overall complexity)
-            if (coordinator.ifJobAlreadyDone(programFileName)) {
-                String response;
-                do {
-                    logger.warn("Job \"" + programFileName + "\" or another one with the same name already executed.\n" +
-                            "Do you want to replace its results?(Y/N)");
-                    response = in.nextLine().toLowerCase(Locale.getDefault());
-                } while (!response.equals("n") && !response.equals("y"));
-                if (response.equals("n"))
-                    continue;
-
-                coordinator.deletePreviousJob(programFileName);
             }
 
             String src;

@@ -116,13 +116,20 @@ public class Coordinator implements Closeable {
             default -> throw new IllegalStateException("Unexpected value: " + program.src());
         };
 
-        if(dfsSrc.getRequestedDstDfsFileName() != null)
-            dfs.validateFileName(dfsSrc.getRequestedDstDfsFileName());
+        final var dfsFilesPrefix = dfsSrc.getDfsFile().name() + "_" + System.currentTimeMillis();
+        final var finalDstDfsFileName = switch (dfsSrc.getRequestedDstDfsFileName()) {
+            case String requestedDstDfsFileName -> {
+                dfs.validateFileName(requestedDstDfsFileName);
+                yield requestedDstDfsFileName;
+            }
+            case null -> dfsFilesPrefix + "_final";
+        };
+
+        if(dfs.exists(finalDstDfsFileName))
+            throw new IllegalStateException("Final destination file " + finalDstDfsFileName + " already exists");
 
         LOGGER.info("Executing program {}...", programFileName);
         long startNanos = System.nanoTime();
-
-        final var dfsFilesPrefix = dfsSrc.getDfsFile().name() + "_" + System.currentTimeMillis();
 
         var currDfsFile0 = dfsSrc.getDfsFile();
         var remainingOps = new ArrayList<>(program.ops());
@@ -135,8 +142,8 @@ public class Coordinator implements Closeable {
 
             final var currDfsFile = currDfsFile0;
             final var isLastStep = remainingOps.isEmpty();
-            final var dstDfsFileName = isLastStep && dfsSrc.getRequestedDstDfsFileName() != null
-                    ? dfsSrc.getRequestedDstDfsFileName()
+            final var dstDfsFileName = isLastStep
+                    ? finalDstDfsFileName
                     : dfsFilesPrefix + "_step" + step;
 
             int jobId = currentJobNumber.getAndIncrement();
@@ -449,19 +456,5 @@ public class Coordinator implements Closeable {
         }
 
         return dfsFile;
-    }
-
-    public boolean ifJobAlreadyDone(String programFileName) {
-        return !dfs.findFile(
-                programFileName.endsWith(".js")
-                ? programFileName.substring(0, programFileName.length() - ".js".length())
-                : programFileName
-        ).partitions().isEmpty();
-    }
-
-    public void deletePreviousJob(String programFileName) {
-        dfs.deleteFile(dfs.findFile(programFileName.endsWith(".js")
-                ? programFileName.substring(0, programFileName.length() - ".js".length())
-                : programFileName));
     }
 }

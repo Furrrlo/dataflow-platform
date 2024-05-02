@@ -16,6 +16,8 @@ public interface Dfs extends Closeable {
 
     DfsFilePartitionInfo createFilePartition(String file, String partitionFile, int partition, CreateFileOptions... options);
 
+    boolean exists(String fileName);
+
     void deleteFile(DfsFile file);
 
     void write(DfsFile file, Tuple2 tuple);

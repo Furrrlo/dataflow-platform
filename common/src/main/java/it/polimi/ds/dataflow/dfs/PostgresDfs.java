@@ -154,6 +154,14 @@ public class PostgresDfs implements Dfs {
         return partition;
     }
 
+    @Override
+    public boolean exists(String fileName) {
+        return ctx.fetchExists(ctx
+                .select(PgClass.RELNAME)
+                .from(PgClass.PG_CLASS)
+                .where(PgClass.RELNAME.eq(fileName)));
+    }
+
     protected enum CandidateInheritance {
         YES, NO
     }
