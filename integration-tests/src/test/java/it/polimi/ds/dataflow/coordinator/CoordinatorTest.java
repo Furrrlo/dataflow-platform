@@ -34,6 +34,8 @@ import java.util.stream.Stream;
 
 import static it.polimi.ds.dataflow.dfs.TestcontainerUtil.createDataSourceFor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assumptions.abort;
 
 @Testcontainers(disabledWithoutDocker = true)
 class CoordinatorTest {
@@ -258,6 +260,20 @@ class CoordinatorTest {
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
     void wordCount() throws Exception {
         doTestWordCount("wordCountTest", "word-count.js");
+    }
+
+    @Test
+    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    void repeatWordCount() {
+        try {
+            doTestWordCount("wordCountRepeatTest", "word-count.js");
+        } catch (Throwable t) {
+            abort("Word count failed");
+        }
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> doTestWordCount("wordCountRepeatTest", "word-count.js"));
     }
 
     @Test
