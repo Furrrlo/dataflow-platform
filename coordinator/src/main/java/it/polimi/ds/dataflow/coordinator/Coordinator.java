@@ -169,7 +169,7 @@ public class Coordinator implements Closeable {
                     scope.fork(() -> scheduleJobPartition(
                             jobId, worker, currOps, currDfsFile, partition, dstDfsFileName));
                 });
-
+                // When all the forked threads are done check if the job is done or there is an error
                 dstPartitions = scope.join().result(IOException::new).stream()
                         .map(r -> new DfsFilePartitionInfo(
                                 dstDfsFileName,
