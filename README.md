@@ -49,12 +49,13 @@ between them using [FDW](https://www.postgresql.org/docs/current/postgres-fdw.ht
 
 The coordinator accepts dataflow programs specified as above, where input data can be read line by
 line from a text file, or already stored in tuple form on the DFS. Each operator is executed in parallel
-over multiplepartitions of the input data, where the number of partitions is specified either:
+over multiple partitions of the input data, where the number of partitions is specified either:
 
 - as part of the dataflow program if the input is not already partitioned (such as in a text file)
 - as an already existing number of partitions on the DFS
-  The coordinator assigns individual tasks to workers and guides the computation, using a scheduled
-  batching approach.
+
+The coordinator assigns individual tasks to workers and guides the computation, using a scheduled
+batching approach.
 
 ![Basic functioning](images/DATAFLOW-PLATFORM-base.gif)
 
@@ -63,17 +64,23 @@ that needs to be re-executed in the case a worker fails:
 
 - In case a worker fails and completely disconnects from the coordinator, another worker is choosen to
   complete the task in its stead
+
   ![Worker failure](images/DATAFLOW-PLATFORM-fail.gif)
+
 - In case a worker is a straggler (which means it does not fail, but takes way too long to complete
   compared to others), another worker is choosen and the two race to finish first
+
   ![Stragglers hadling](images/DATAFLOW-PLATFORM-stragglers.gif)
+
 - In case a worker recovers from a crash, it will be instructed to load intermediate results from
   the its DFS node (which is considered durable, somewhat local storage) and resume back from where
   it was before
+
   ![Worker failure hadling](images/DATAFLOW-PLATFORM-worker.gif)
 
 In case all the above fails and the coordinator has no connected workers for a given threshold, all
 is lost
+
 ![Coordinator gives up](images/DATAFLOW-PLATFORM-desperate.gif)
 
 It is assumed the coordinator to be reliable.
@@ -188,7 +195,7 @@ engine
   });
 ```
 
-Typescript files to ease the writing of programs can be found
+TypeScript types to ease the writing of programs can be found
 [here](coordinator/src/test/resources/it/polimi/ds/dataflow/src/types.d.ts).
 
 ## Running
